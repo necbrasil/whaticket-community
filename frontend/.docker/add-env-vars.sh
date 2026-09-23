@@ -14,6 +14,11 @@ _addSslConfig() {
     FILE_CONF=/etc/nginx/sites.d/${1}.conf
     FILE_SSL_CONF=/etc/nginx/conf.d/00-ssl-redirect.conf;
 
+    # already configured on a previous start (container restart)
+    if grep -q -e '^listen' -e 'ssl.conf' ${FILE_CONF}; then
+        return;
+    fi;
+
     if [ -f ${SSL_CERTIFICATE} ] && [ -f ${SSL_CERTIFICATE_KEY} ]; then
         echo "saving ssl config in ${FILE_CONF}"
         echo 'include include.d/ssl-redirect.conf;' >> ${FILE_SSL_CONF};
