@@ -473,16 +473,20 @@ export const handleMessageAck = async (
       ]
     });
 
-    if (!messageToUpdate) {
+    // receipts can arrive out of order: never go back (e.g. read -> delivered)
+    if (!messageToUpdate || ack <= messageToUpdate.ack) {
       return;
     }
 
     await messageToUpdate.update({ ack });
 
-    io.to(messageToUpdate.ticketId.toString()).emit("appMessage", {
-      action: "update",
-      message: messageToUpdate
-    });
+    // "notification" too: the conversations list shows the last message ticks
+    io.to(messageToUpdate.ticketId.toString())
+      .to("notification")
+      .emit("appMessage", {
+        action: "update",
+        message: messageToUpdate
+      });
   } catch (err) {
     Sentry.captureException(err);
     logger.error(`Error handling message ack: ${err}`);

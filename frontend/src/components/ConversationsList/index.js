@@ -21,6 +21,9 @@ import {
 import SearchIcon from "@material-ui/icons/Search";
 import AddIcon from "@material-ui/icons/Add";
 import GroupIcon from "@material-ui/icons/Group";
+import AccessTime from "@material-ui/icons/AccessTime";
+import Done from "@material-ui/icons/Done";
+import DoneAll from "@material-ui/icons/DoneAll";
 
 import api from "../../services/api";
 import openSocket from "../../services/socket-io";
@@ -101,6 +104,27 @@ const useStyles = makeStyles((theme) => ({
   },
   preview: {
     minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+  },
+  previewText: {
+    minWidth: 0,
+  },
+  unreadPreview: {
+    color: theme.palette.text.primary,
+    fontWeight: 600,
+  },
+  ackIcon: {
+    fontSize: 16,
+    marginRight: 3,
+    flex: "none",
+    color: "grey",
+  },
+  ackReadIcon: {
+    fontSize: 16,
+    marginRight: 3,
+    flex: "none",
+    color: "#34B7F1",
   },
   badge: {
     color: "white",
@@ -134,6 +158,12 @@ const reducer = (state, action) => {
       const unread = (previous?.unread || 0) + (addUnread ? 1 : 0);
       const rest = state.filter((c) => c.contact.id !== conversation.contact.id);
       return [{ ...conversation, unread }, ...rest];
+    }
+    case "UPDATE_ACK": {
+      const { id, ack } = action.payload;
+      return state.map((c) =>
+        c.lastMessageId === id ? { ...c, lastMessageAck: ack } : c
+      );
     }
     case "UPDATE": {
       const { contactId, changes } = action.payload;
@@ -173,6 +203,15 @@ const formatPreview = (conversation) => {
   return conversation.lastMessageFromMe
     ? `${i18n.t("conversations.you")}: ${text}`
     : text;
+};
+
+// same meaning as the chat: 0 pending, 1 sent, 2 delivered, 3/4 read/played
+const renderAck = (ack, classes) => {
+  if (ack === null || ack === undefined) return null;
+  if (ack === 0) return <AccessTime className={classes.ackIcon} />;
+  if (ack === 1) return <Done className={classes.ackIcon} />;
+  if (ack === 2) return <DoneAll className={classes.ackIcon} />;
+  return <DoneAll className={classes.ackReadIcon} />;
 };
 
 const formatTime = (date) => {
@@ -227,6 +266,13 @@ const ConversationsList = ({ selectedContactId }) => {
     socket.on("connect", () => socket.emit("joinNotification"));
 
     socket.on("appMessage", (data) => {
+      if (data.action === "update" && data.message) {
+        dispatch({
+          type: "UPDATE_ACK",
+          payload: { id: data.message.id, ack: data.message.ack },
+        });
+        return;
+      }
       if (data.action !== "create" || !data.message || !data.ticket) return;
 
       const { message, contact } = data;
@@ -241,6 +287,8 @@ const ConversationsList = ({ selectedContactId }) => {
           onlyIfListed: Boolean(searchRef.current),
           conversation: {
             contact: contact || data.ticket.contact,
+            lastMessageId: message.id,
+            lastMessageAck: message.ack,
             lastMessage: message.body,
             lastMessageFromMe: message.fromMe,
             lastMediaType: message.mediaType,
@@ -358,15 +406,21 @@ const ConversationsList = ({ selectedContactId }) => {
                   }
                   secondary={
                     <div className={classes.previewRow}>
-                      <Typography
-                        noWrap
-                        variant="body2"
-                        color="textSecondary"
-                        component="span"
-                        className={classes.preview}
-                      >
-                        {formatPreview(conversation)}
-                      </Typography>
+                      <span className={classes.preview}>
+                        {conversation.lastMessageFromMe &&
+                          renderAck(conversation.lastMessageAck, classes)}
+                        <Typography
+                          noWrap
+                          variant="body2"
+                          color="textSecondary"
+                          component="span"
+                          className={`${classes.previewText} ${
+                            unread ? classes.unreadPreview : ""
+                          }`}
+                        >
+                          {formatPreview(conversation)}
+                        </Typography>
+                      </span>
                       {unread > 0 && (
                         <Badge
                           badgeContent={unread}

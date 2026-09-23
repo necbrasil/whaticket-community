@@ -10,6 +10,8 @@ interface Request {
 interface ConversationRow {
   contactId: number;
   lastAt: Date;
+  lastId: string | null;
+  lastAck: number | null;
   lastBody: string | null;
   lastFromMe: number | null;
   lastMediaType: string | null;
@@ -18,6 +20,8 @@ interface ConversationRow {
 
 export interface Conversation {
   contact: Contact;
+  lastMessageId: string | null;
+  lastMessageAck: number | null;
   lastMessage: string;
   lastMessageFromMe: boolean;
   lastMediaType: string | null;
@@ -58,6 +62,8 @@ const ListConversationsService = async ({
   const rows = await sequelize.query<ConversationRow>(
     `SELECT x.contactId,
        COALESCE(${lastMessageOf("createdAt")}, x.lastUpdate) AS lastAt,
+       ${lastMessageOf("id")} AS lastId,
+       ${lastMessageOf("ack")} AS lastAck,
        ${lastMessageOf("body")} AS lastBody,
        ${lastMessageOf("fromMe")} AS lastFromMe,
        ${lastMessageOf("mediaType")} AS lastMediaType,
@@ -90,6 +96,8 @@ const ListConversationsService = async ({
     if (!contact) return;
     conversations.push({
       contact,
+      lastMessageId: row.lastId,
+      lastMessageAck: row.lastAck === null ? null : Number(row.lastAck),
       lastMessage: row.lastBody || "",
       lastMessageFromMe: Boolean(row.lastFromMe),
       lastMediaType: row.lastMediaType,

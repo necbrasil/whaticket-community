@@ -457,13 +457,12 @@ const hasMedia = (msg: WAMessage): boolean => {
   ].includes(messageType || "");
 };
 
+// WhatsApp status (ERROR 0, PENDING 1, SERVER_ACK 2, DELIVERY_ACK 3, READ 4,
+// PLAYED 5) to the panel's ack (0 pending, 1 sent, 2 delivered, 3 read,
+// 4 played)
 const mapMessageAck = (status: number | null | undefined): MessageAck => {
   if (status === null || status === undefined) return 0;
-  if (status >= 4) return 4;
-  if (status >= 3) return 3;
-  if (status >= 2) return 2;
-  if (status >= 1) return 1;
-  return 0;
+  return Math.min(Math.max(status - 1, 0), 4) as MessageAck;
 };
 
 // WhatsApp wraps some messages (document with caption, albums, disappearing
@@ -1321,8 +1320,10 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
         try {
           if (!event.update.status || !event.key.id) return;
 
-          const ack = (event.update.status as MessageAck) || 0;
-          await handleMessageAck(event.key.id, ack);
+          await handleMessageAck(
+            event.key.id,
+            mapMessageAck(event.update.status)
+          );
         } catch (err) {
           logger.error({
             info: "Error handling message update",
