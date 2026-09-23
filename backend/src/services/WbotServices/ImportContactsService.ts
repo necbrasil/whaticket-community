@@ -15,23 +15,17 @@ const ImportContactsService = async (userId: number): Promise<void> => {
   }
 
   if (phoneContacts) {
-    await Promise.all(
-      phoneContacts.map(async ({ number, name }) => {
-        if (!number) {
-          return null;
-        }
-        if (!name) {
-          name = number;
-        }
+    // the phone may return the same number more than once
+    const contactsByNumber = new Map<string, string>();
+    phoneContacts.forEach(({ number, name }) => {
+      if (number && !contactsByNumber.has(number)) {
+        contactsByNumber.set(number, name || number);
+      }
+    });
 
-        const numberExists = await Contact.findOne({
-          where: { number }
-        });
-
-        if (numberExists) return null;
-
-        return Contact.create({ number, name });
-      })
+    await Contact.bulkCreate(
+      Array.from(contactsByNumber, ([number, name]) => ({ number, name })),
+      { ignoreDuplicates: true }
     );
   }
 };
