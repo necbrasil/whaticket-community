@@ -262,9 +262,24 @@ const getMessageData = async (
   };
 };
 
+// WhatsApp Web may not have loaded the chat list right after "ready"
+const getChatsWithRetry = async (wbot: Session, attempts = 5) => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      return await wbot.getChats();
+    } catch (err) {
+      if (attempt >= attempts) throw err;
+      logger.warn(`getChats failed (attempt ${attempt}/${attempts}), retrying`);
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(r => setTimeout(r, attempt * 3000));
+    }
+  }
+};
+
 const syncUnreadMessages = async (wbot: Session) => {
   try {
-    const chats = await wbot.getChats();
+    const chats = await getChatsWithRetry(wbot);
 
     /* eslint-disable no-restricted-syntax */
     /* eslint-disable no-await-in-loop */
