@@ -77,6 +77,7 @@ interface Session extends WASocket {
 
 const sessions = new Map<number, Session>();
 const stores = new Map<number, Store>();
+const reconnectAttempts = new Map<number, number>();
 
 const msgRetryCounterLRU = new LRUCache<string, number>({
   max: 5000,
@@ -1013,10 +1014,7 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
 
   const connOptions: UserFacingSocketConfig = {
     logger: whaileyLogger,
-    // WhatsApp only sends the full history to desktop clients
-    browser: syncHistory
-      ? Browsers.macOS(process.env.WHATSAPP_BROWSER_NAME || "Desktop")
-      : Browsers.ubuntu(process.env.WHATSAPP_BROWSER_NAME || "Chrome"),
+    browser: Browsers.ubuntu(process.env.WHATSAPP_BROWSER_NAME || "Chrome"),
     emitOwnEvents: true,
     auth: {
       creds: state.creds,
@@ -1039,7 +1037,10 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
         jid === "status@broadcast"
       );
     },
-    syncFullHistory: syncHistory,
+    // full sync needs a desktop browser identity, which coincided with WhatsApp
+    // closing every connection with 428; the recent history is still sent when
+    // shouldSyncHistoryMessage is on
+    syncFullHistory: false,
     version: waVersionToUse,
     msgRetryCounterMap,
     markOnlineOnConnect: false,
@@ -1206,23 +1207,41 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
       if (shouldReconnect) {
         await flushPendingCredsSave(sessionId);
 
+        // the connection may have been deleted in the panel meanwhile
+        const stillExists = await Whatsapp.findByPk(sessionId);
+        if (!stillExists) {
+          logger.info({ info: "Session deleted, not reconnecting", sessionId });
+          reconnectAttempts.delete(sessionId);
+          await removeSession(sessionId);
+          return;
+        }
+
         await whatsapp.update({ status: "OPENING" });
         io.emit("whatsappSession", {
           action: "update",
           session: whatsapp
         });
+
+        // back off on repeated failures so WhatsApp doesn't rate limit the IP
+        const attempt = (reconnectAttempts.get(sessionId) || 0) + 1;
+        reconnectAttempts.set(sessionId, attempt);
+        const delay = Math.min(3000 * 2 ** (attempt - 1), 60_000);
+
         logger.info({
           info: "Connection closed, reconnecting...",
           sessionId,
-          statusCode
+          statusCode,
+          attempt,
+          delay
         });
 
-        await sleep(3000);
+        await sleep(delay);
         init(whatsapp);
       }
     }
 
     if (connection === "open") {
+      reconnectAttempts.delete(sessionId);
       await flushPendingCredsSave(sessionId);
 
       await whatsapp.update({
@@ -1243,6 +1262,7 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     }
 
     if (qr !== undefined) {
+      reconnectAttempts.delete(sessionId);
       await whatsapp.update({
         qrcode: qr,
         status: "qrcode"
