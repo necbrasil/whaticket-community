@@ -54,6 +54,8 @@ import { sleep } from "../../../utils/sleep";
 import {
   handleMessage,
   handleMessageAck,
+  importHistoryChat,
+  HistoryMessage,
   ContactPayload,
   MessagePayload,
   MediaPayload,
@@ -823,6 +825,99 @@ const getMessageData = async (
   };
 };
 
+// Old conversations are only sent by WhatsApp right after the QR code is
+// scanned, so enabling this requires reconnecting the session.
+const syncHistory = process.env.WHAILEYS_SYNC_HISTORY === "true";
+
+// history batches are imported one at a time, so the same chat split across
+// batches doesn't race on ticket creation
+const historyQueues = new Map<number, Promise<void>>();
+
+const importHistory = async (
+  wbot: Session,
+  messages: WAMessage[]
+): Promise<void> => {
+  const chats = new Map<string, WAMessage[]>();
+
+  messages.forEach(msg => {
+    const jid = msg.key.remoteJid;
+    if (!jid || !msg.key.id || !msg.message) return;
+    if (
+      isJidBroadcast(jid) ||
+      jid.endsWith("newsletter") ||
+      jid === "status@broadcast"
+    ) {
+      return;
+    }
+    if (!shouldHandleMessage(msg)) return;
+
+    const chatMessages = chats.get(jid) || [];
+    chatMessages.push(msg);
+    chats.set(jid, chatMessages);
+  });
+
+  logger.info({
+    info: "Importing history batch",
+    sessionId: wbot.id,
+    chats: chats.size,
+    messages: messages.length
+  });
+
+  let imported = 0;
+
+  /* eslint-disable no-restricted-syntax, no-await-in-loop */
+  for (const [jid, chatMessages] of chats) {
+    try {
+      chatMessages.sort(
+        (a, b) => Number(a.messageTimestamp) - Number(b.messageTimestamp)
+      );
+
+      const isGroup = isJidGroup(jid);
+      const contactMsg =
+        chatMessages.find(msg => !msg.key.fromMe) || chatMessages[0];
+      const contact = await convertToContactPayload(jid, contactMsg, wbot);
+
+      const senders = new Map<string, ContactPayload>();
+      const historyMessages: HistoryMessage[] = [];
+
+      for (const msg of chatMessages) {
+        let sender: ContactPayload | undefined;
+        const participant = msg.key.participant;
+        if (isGroup && !msg.key.fromMe && participant) {
+          sender = senders.get(participant);
+          if (!sender) {
+            sender = await convertToContactPayload(participant, msg, wbot);
+            senders.set(participant, sender);
+          }
+        }
+
+        historyMessages.push({
+          message: convertToMessagePayload(msg),
+          sender,
+          downloadMedia: hasMedia(msg)
+            ? () => convertToMediaPayload(msg, wbot)
+            : undefined
+        });
+      }
+
+      imported += await importHistoryChat({
+        whatsappId: wbot.id,
+        contact,
+        messages: historyMessages
+      });
+    } catch (err) {
+      logger.error({ info: "Error importing history chat", err, jid });
+    }
+  }
+  /* eslint-enable no-restricted-syntax, no-await-in-loop */
+
+  logger.info({
+    info: "History batch imported",
+    sessionId: wbot.id,
+    imported
+  });
+};
+
 const getWbot = (sessionId: number): Session => {
   const wbot = sessions.get(sessionId);
 
@@ -854,6 +949,7 @@ const removeSession = async (whatsappId: number): Promise<void> => {
     wbot.ev.removeAllListeners("chats.delete");
     wbot.ev.removeAllListeners("blocklist.set");
     wbot.ev.removeAllListeners("blocklist.update");
+    wbot.ev.removeAllListeners("messaging-history.set");
 
     try {
       wbot.end(undefined);
@@ -917,7 +1013,10 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
 
   const connOptions: UserFacingSocketConfig = {
     logger: whaileyLogger,
-    browser: Browsers.ubuntu(process.env.WHATSAPP_BROWSER_NAME || "Chrome"),
+    // WhatsApp only sends the full history to desktop clients
+    browser: syncHistory
+      ? Browsers.macOS(process.env.WHATSAPP_BROWSER_NAME || "Desktop")
+      : Browsers.ubuntu(process.env.WHATSAPP_BROWSER_NAME || "Chrome"),
     emitOwnEvents: true,
     auth: {
       creds: state.creds,
@@ -931,7 +1030,7 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
         })
       )
     },
-    shouldSyncHistoryMessage: () => false,
+    shouldSyncHistoryMessage: () => syncHistory,
     shouldIgnoreJid: jid => {
       if (typeof jid !== "string") return false;
       return (
@@ -940,7 +1039,7 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
         jid === "status@broadcast"
       );
     },
-    syncFullHistory: false,
+    syncFullHistory: syncHistory,
     version: waVersionToUse,
     msgRetryCounterMap,
     markOnlineOnConnect: false,
@@ -987,6 +1086,16 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
   wbot.ev.on("creds.update", () => {
     debouncedSaveCreds(whatsapp, state.creds);
   });
+
+  if (syncHistory) {
+    wbot.ev.on("messaging-history.set", ({ messages }) => {
+      const previous = historyQueues.get(sessionId) || Promise.resolve();
+      const next = previous
+        .then(() => importHistory(wbot, messages))
+        .catch(err => logger.error({ info: "Error importing history", err }));
+      historyQueues.set(sessionId, next);
+    });
+  }
 
   wbot.ev.on("messages.upsert", async ({ messages, type }) => {
     messages.forEach(msg => {

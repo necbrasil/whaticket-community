@@ -320,6 +320,138 @@ export const handleMessage = async (
   }
 };
 
+export interface HistoryMessage {
+  message: MessagePayload;
+  // group messages only: the participant who sent it
+  sender?: ContactPayload;
+  // lazy, so media is only downloaded for messages not imported yet
+  downloadMedia?: () => Promise<MediaPayload | undefined>;
+}
+
+export interface HistoryChat {
+  whatsappId: number;
+  contact: ContactPayload;
+  // sorted oldest first
+  messages: HistoryMessage[];
+}
+
+const toDate = (timestamp: number): Date =>
+  new Date(timestamp < 1e12 ? timestamp * 1000 : timestamp);
+
+// Saves old messages from the WhatsApp history sync. Unlike handleMessage it
+// sends nothing (no greeting / queue options) and doesn't notify the panel:
+// messages go to the contact's latest ticket, or to a new closed ticket.
+export const importHistoryChat = async ({
+  whatsappId,
+  contact: contactPayload,
+  messages
+}: HistoryChat): Promise<number> => {
+  const contact = await CreateOrUpdateContactService(contactPayload);
+
+  let ticket = await Ticket.findOne({
+    where: { contactId: contact.id, whatsappId },
+    order: [["updatedAt", "DESC"]]
+  });
+  const ticketCreatedByImport = !ticket;
+
+  const senders = new Map<string, Contact>();
+  const getSender = async (sender: ContactPayload): Promise<Contact> => {
+    const key = sender.number || sender.lid || "";
+    const cached = senders.get(key);
+    if (cached) return cached;
+
+    const senderContact = await CreateOrUpdateContactService(sender);
+    senders.set(key, senderContact);
+    return senderContact;
+  };
+
+  let imported = 0;
+
+  /* eslint-disable no-restricted-syntax, no-await-in-loop */
+  for (const { message, sender, downloadMedia } of messages) {
+    try {
+      const alreadyImported = await Message.count({
+        where: { id: message.id }
+      });
+      if (alreadyImported) continue;
+
+      const date = toDate(message.timestamp);
+
+      if (!ticket) {
+        ticket = await Ticket.create(
+          {
+            contactId: contact.id,
+            whatsappId,
+            status: "closed",
+            isGroup: contactPayload.isGroup,
+            unreadMessages: 0,
+            lastMessage: message.body,
+            createdAt: date,
+            updatedAt: date
+          },
+          { silent: true }
+        );
+      }
+
+      let contactId: number | undefined;
+      if (!message.fromMe) {
+        contactId = sender ? (await getSender(sender)).id : contact.id;
+      }
+
+      const quotedMsgExists = message.quotedMsgId
+        ? await Message.count({ where: { id: message.quotedMsgId } })
+        : 0;
+
+      const messageData: any = {
+        id: message.id,
+        ticketId: ticket.id,
+        contactId,
+        body: message.body,
+        fromMe: message.fromMe,
+        read: true,
+        mediaType: message.type,
+        quotedMsgId: quotedMsgExists ? message.quotedMsgId : undefined,
+        ack: message.ack !== undefined ? message.ack : 0,
+        createdAt: date,
+        updatedAt: date
+      };
+
+      if (message.hasMedia && downloadMedia) {
+        const mediaPayload = await downloadMedia();
+        if (mediaPayload?.mimetype) {
+          const filename = await saveMediaFile(mediaPayload);
+          messageData.mediaUrl = filename;
+          messageData.body = message.body || filename;
+          const [mediaType] = mediaPayload.mimetype.split("/");
+          messageData.mediaType = mediaType;
+        }
+      }
+
+      await Message.create(messageData, { silent: true });
+
+      if (ticketCreatedByImport && date >= ticket.updatedAt) {
+        // instance.save() drops updatedAt when silent, the static update keeps it
+        await Ticket.update(
+          { lastMessage: messageData.body, updatedAt: date },
+          { where: { id: ticket.id }, silent: true }
+        );
+        ticket.setDataValue("updatedAt", date);
+      }
+
+      imported += 1;
+    } catch (err) {
+      logger.error({
+        info: "Error importing history message",
+        err,
+        messageId: message.id
+      });
+    }
+  }
+  /* eslint-enable no-restricted-syntax, no-await-in-loop */
+
+  return imported;
+};
+
 export const handleMessageAck = async (
   messageId: string,
   ack: MessageAck
