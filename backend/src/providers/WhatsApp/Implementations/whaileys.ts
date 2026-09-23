@@ -80,6 +80,23 @@ const sessions = new Map<number, Session>();
 const stores = new Map<number, Store>();
 const reconnectAttempts = new Map<number, number>();
 
+// Messages of the same chat are handled one at a time: in parallel, two
+// messages from a new contact would both miss the ticket and create two.
+const chatQueues = new Map<string, Promise<void>>();
+const enqueueForChat = (
+  sessionId: number,
+  jid: string,
+  task: () => Promise<void>
+): Promise<void> => {
+  const key = `${sessionId}:${jid}`;
+  const next = (chatQueues.get(key) || Promise.resolve()).then(task);
+  chatQueues.set(key, next);
+  next.finally(() => {
+    if (chatQueues.get(key) === next) chatQueues.delete(key);
+  });
+  return next;
+};
+
 const msgRetryCounterLRU = new LRUCache<string, number>({
   max: 5000,
   ttl: 600 * 1000,
@@ -696,8 +713,12 @@ const convertToContactPayload = async (
     jidDecode(preferPn || "")?.user ||
     normalizedJid.split("@")[0];
 
+  // drop the device suffix ("123:45@lid"), it varies between messages
+  const lidUser = jidDecode(lid || "")?.user;
   const lidValue =
-    isLidUser(resolvedJid) && decoded?.user ? `${decoded.user}@lid` : lid;
+    isLidUser(resolvedJid) && decoded?.user
+      ? `${decoded.user}@lid`
+      : lidUser && `${lidUser}@lid`;
 
   const name =
     contactInfo?.name ||
@@ -1142,25 +1163,27 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     if (validMessages.length === 0) return;
 
     await Promise.all(
-      validMessages.map(async msg => {
-        try {
-          const {
-            messagePayload,
-            contactPayload,
-            contextPayload,
-            mediaPayload
-          } = await getMessageData(msg, wbot);
+      validMessages.map(msg =>
+        enqueueForChat(sessionId, msg.key.remoteJid || "", async () => {
+          try {
+            const {
+              messagePayload,
+              contactPayload,
+              contextPayload,
+              mediaPayload
+            } = await getMessageData(msg, wbot);
 
-          await handleMessage(
-            messagePayload,
-            contactPayload,
-            contextPayload,
-            mediaPayload
-          );
-        } catch (err) {
-          logger.error(err, "Error handling message upsert");
-        }
-      })
+            await handleMessage(
+              messagePayload,
+              contactPayload,
+              contextPayload,
+              mediaPayload
+            );
+          } catch (err) {
+            logger.error(err, "Error handling message upsert");
+          }
+        })
+      )
     );
   });
 

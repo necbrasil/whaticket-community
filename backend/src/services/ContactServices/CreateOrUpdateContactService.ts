@@ -27,13 +27,15 @@ const emitContact = (action: "update" | "create", contact: Contact) => {
 const CreateOrUpdateContactService = async ({
   name,
   number: rawNumber,
-  lid,
+  lid: rawLid,
   profilePicUrl,
   isGroup,
   email = "",
   extraInfo = []
 }: Request): Promise<Contact> => {
   const number = isGroup ? rawNumber : rawNumber.replace(/[^0-9]/g, "");
+  // the same LID may come with a device suffix ("123:45@lid"); store it without
+  const lid = rawLid?.replace(/:\d+@/, "@");
   if (!number && !lid) throw new Error("Either number or lid must be provided");
 
   const [contactByNumber, contactByLid] = await Promise.all([
