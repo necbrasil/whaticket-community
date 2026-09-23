@@ -19,12 +19,13 @@ module.exports = {
         onUpdate: "CASCADE",
         onDelete: "CASCADE"
       },
+      // VARCHAR (not TEXT): MySQL can't index TEXT columns without a key length
       type: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING(64),
         allowNull: false
       },
       keyId: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING(255),
         allowNull: false
       },
       value: {
