@@ -21,6 +21,7 @@ import CreateContactService from "../services/ContactServices/CreateContactServi
 
 import { whatsappProvider } from "../providers/WhatsApp/whatsappProvider";
 import { MessageType, MessageAck } from "../providers/WhatsApp/types";
+import GetContactChatId from "../helpers/GetContactChatId";
 
 const writeFileAsync = promisify(writeFile);
 
@@ -177,7 +178,7 @@ const handleQueueLogic = async (
     try {
       await whatsappProvider.sendMessage(
         whatsappId,
-        `${contactPayload.number}@c.us`,
+        GetContactChatId(contactPayload, false),
         body
       );
     } catch (error) {
@@ -199,7 +200,7 @@ const handleQueueLogic = async (
         try {
           await whatsappProvider.sendMessage(
             whatsappId,
-            `${contactPayload.number}@c.us`,
+            GetContactChatId(contactPayload, false),
             body
           );
         } catch (error) {

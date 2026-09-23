@@ -17,6 +17,7 @@ import makeWASocket, {
   WAMessageKey,
   downloadMediaMessage,
   getContentType,
+  normalizeMessageContent,
   jidNormalizedUser,
   jidDecode,
   makeInMemoryStore,
@@ -448,6 +449,19 @@ const mapMessageAck = (status: number | null | undefined): MessageAck => {
   return 0;
 };
 
+// WhatsApp wraps some messages (document with caption, albums, disappearing
+// and view once messages); unwrap them so they're handled like plain ones.
+// Edits are left wrapped so they don't show up as new messages.
+const unwrapMessage = (msg: WAMessage): WAMessage => {
+  let content = msg.message;
+  for (let depth = 0; depth < 5 && content && !content.editedMessage; depth += 1) {
+    const inner = normalizeMessageContent(content);
+    if (!inner || inner === content) break;
+    content = inner;
+  }
+  return content === msg.message ? msg : { ...msg, message: content };
+};
+
 const shouldHandleMessage = (msg: WAMessage): boolean => {
   const messageType = getContentType(msg.message || undefined);
   const validTypes = [
@@ -757,7 +771,8 @@ const convertToMediaPayload = async (
       const mimetype = docMsg?.mimetype || "application/octet-stream";
       const ext = getExtension(mimetype, "bin");
       return {
-        filename: docMsg?.title || `document-${Date.now()}.${ext}`,
+        filename:
+          docMsg?.fileName || docMsg?.title || `document-${Date.now()}.${ext}`,
         mimetype,
         data: buffer.toString("base64")
       };
@@ -840,7 +855,7 @@ const importHistory = async (
 ): Promise<void> => {
   const chats = new Map<string, WAMessage[]>();
 
-  messages.forEach(msg => {
+  messages.map(unwrapMessage).forEach(msg => {
     const jid = msg.key.remoteJid;
     if (!jid || !msg.key.id || !msg.message) return;
     if (
@@ -1114,7 +1129,7 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
       });
     });
 
-    const validMessages = messages.filter(msg => {
+    const validMessages = messages.map(unwrapMessage).filter(msg => {
       if (!msg.message || !shouldHandleMessage(msg)) return false;
 
       if (type === "notify") return true;

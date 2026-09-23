@@ -71,6 +71,7 @@ const CreateOrUpdateContactService = async ({
   if (contactByNumber) {
     await contactByNumber.update({
       lid: lid || contactByNumber.lid,
+      isGroup: isGroup || contactByNumber.isGroup,
       profilePicUrl
     });
 
