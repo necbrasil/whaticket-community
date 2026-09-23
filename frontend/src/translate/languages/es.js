@@ -281,8 +281,33 @@ const messages = {
           cancel: "Cancelar",
         },
       },
+      conversations: {
+        searchPlaceholder: "Buscar conversación",
+        empty: "No se encontraron conversaciones",
+        selectConversation: "Seleccione una conversación para comenzar",
+        you: "Tú",
+        newConversation: {
+          title: "Nueva conversación",
+          fieldLabel: "Nombre o número",
+          startWith: "Conversar con",
+          addContact: "Agregar contacto",
+          cancel: "Cancelar",
+        },
+        media: {
+          image: "Foto",
+          video: "Video",
+          audio: "Audio",
+          ptt: "Audio",
+          application: "Documento",
+          document: "Documento",
+          sticker: "Sticker",
+          location: "Ubicación",
+          vcard: "Contacto",
+        },
+      },
       mainDrawer: {
         listItems: {
+          conversations: "Conversaciones",
           dashboard: "Dashboard",
           connections: "Conexiones",
           tickets: "Tickets",

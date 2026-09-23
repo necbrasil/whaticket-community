@@ -15,6 +15,7 @@ import PeopleAltOutlinedIcon from "@material-ui/icons/PeopleAltOutlined";
 import ContactPhoneOutlinedIcon from "@material-ui/icons/ContactPhoneOutlined";
 import AccountTreeOutlinedIcon from "@material-ui/icons/AccountTreeOutlined";
 import QuestionAnswerOutlinedIcon from "@material-ui/icons/QuestionAnswerOutlined";
+import ChatOutlinedIcon from "@material-ui/icons/ChatOutlined";
 
 import { i18n } from "../translate/i18n";
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
@@ -72,6 +73,11 @@ const MainListItems = (props) => {
 
   return (
     <div onClick={drawerClose}>
+      <ListItemLink
+        to="/conversations"
+        primary={i18n.t("mainDrawer.listItems.conversations")}
+        icon={<ChatOutlinedIcon />}
+      />
       <ListItemLink
         to="/"
         primary="Dashboard"

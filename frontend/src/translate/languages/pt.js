@@ -280,8 +280,33 @@ const messages = {
           cancel: "Cancelar",
         },
       },
+      conversations: {
+        searchPlaceholder: "Pesquisar conversa",
+        empty: "Nenhuma conversa encontrada",
+        selectConversation: "Selecione uma conversa para começar",
+        you: "Você",
+        newConversation: {
+          title: "Nova conversa",
+          fieldLabel: "Nome ou número",
+          startWith: "Conversar com",
+          addContact: "Adicionar contato",
+          cancel: "Cancelar",
+        },
+        media: {
+          image: "Foto",
+          video: "Vídeo",
+          audio: "Áudio",
+          ptt: "Áudio",
+          application: "Documento",
+          document: "Documento",
+          sticker: "Figurinha",
+          location: "Localização",
+          vcard: "Contato",
+        },
+      },
       mainDrawer: {
         listItems: {
+          conversations: "Conversas",
           dashboard: "Dashboard",
           connections: "Conexões",
           tickets: "Tickets",

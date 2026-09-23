@@ -277,8 +277,33 @@ const messages = {
           cancel: "Cancel",
         },
       },
+      conversations: {
+        searchPlaceholder: "Search conversation",
+        empty: "No conversations found",
+        selectConversation: "Select a conversation to start",
+        you: "You",
+        newConversation: {
+          title: "New conversation",
+          fieldLabel: "Name or number",
+          startWith: "Chat with",
+          addContact: "Add contact",
+          cancel: "Cancel",
+        },
+        media: {
+          image: "Photo",
+          video: "Video",
+          audio: "Audio",
+          ptt: "Audio",
+          application: "Document",
+          document: "Document",
+          sticker: "Sticker",
+          location: "Location",
+          vcard: "Contact",
+        },
+      },
       mainDrawer: {
         listItems: {
+          conversations: "Conversations",
           dashboard: "Dashboard",
           connections: "Connections",
           tickets: "Tickets",

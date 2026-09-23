@@ -213,9 +213,13 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-const MessageInput = ({ ticketStatus }) => {
+// Outside a ticket route (conversations page) the caller passes getTicketId,
+// resolved on each send, and resetKey to clear the input when the chat changes.
+const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
   const classes = useStyles();
   const { ticketId } = useParams();
+  const resolveTicketId = async () =>
+    getTicketId ? getTicketId() : ticketId;
 
   const [medias, setMedias] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -244,7 +248,7 @@ const MessageInput = ({ ticketStatus }) => {
       setMedias([]);
       setReplyingMessage(null);
     };
-  }, [ticketId, setReplyingMessage]);
+  }, [ticketId, resetKey, setReplyingMessage]);
 
   const handleChangeInput = e => {
     setInputMessage(e.target.value);
@@ -288,7 +292,7 @@ const MessageInput = ({ ticketStatus }) => {
     });
 
     try {
-      await api.post(`/messages/${ticketId}`, formData);
+      await api.post(`/messages/${await resolveTicketId()}`, formData);
     } catch (err) {
       toastError(err);
     }
@@ -311,7 +315,7 @@ const MessageInput = ({ ticketStatus }) => {
       quotedMsg: replyingMessage,
     };
     try {
-      await api.post(`/messages/${ticketId}`, message);
+      await api.post(`/messages/${await resolveTicketId()}`, message);
     } catch (err) {
       toastError(err);
     }
@@ -379,7 +383,7 @@ const MessageInput = ({ ticketStatus }) => {
       formData.append("body", filename);
       formData.append("fromMe", true);
 
-      await api.post(`/messages/${ticketId}`, formData);
+      await api.post(`/messages/${await resolveTicketId()}`, formData);
     } catch (err) {
       toastError(err);
     }

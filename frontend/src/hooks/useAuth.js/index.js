@@ -94,7 +94,7 @@ const useAuth = () => {
 			setUser(data.user);
 			setIsAuth(true);
 			toast.success(i18n.t("auth.toasts.success"));
-			history.push("/tickets");
+			history.push("/conversations");
 			setLoading(false);
 		} catch (err) {
 			toastError(err);

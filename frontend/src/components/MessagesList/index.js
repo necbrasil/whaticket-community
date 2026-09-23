@@ -307,40 +307,51 @@ const reducer = (state, action) => {
   }
 };
 
-const MessagesList = ({ ticketId, isGroup }) => {
+// With contactId it shows the whole conversation of the contact (every
+// ticket), otherwise only the messages of ticketId.
+const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
   const classes = useStyles();
 
   const [messagesList, dispatch] = useReducer(reducer, []);
   const [pageNumber, setPageNumber] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [conversationTicketIds, setConversationTicketIds] = useState([]);
   const lastMessageRef = useRef();
 
   const [selectedMessage, setSelectedMessage] = useState({});
   const [anchorEl, setAnchorEl] = useState(null);
   const messageOptionsMenuOpen = Boolean(anchorEl);
-  const currentTicketId = useRef(ticketId);
+  const listKey = contactId ? `contact-${contactId}` : ticketId;
+  const onNewMessageRef = useRef(onNewMessage);
+  onNewMessageRef.current = onNewMessage;
+  const currentTicketId = useRef(listKey);
 
   useEffect(() => {
     dispatch({ type: "RESET" });
     setPageNumber(1);
+    setConversationTicketIds([]);
 
-    currentTicketId.current = ticketId;
-  }, [ticketId]);
+    currentTicketId.current = listKey;
+  }, [listKey]);
 
   useEffect(() => {
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       const fetchMessages = async () => {
         try {
-          const { data } = await api.get("/messages/" + ticketId, {
+          const url = contactId
+            ? `/conversations/${contactId}/messages`
+            : "/messages/" + ticketId;
+          const { data } = await api.get(url, {
             params: { pageNumber },
           });
 
-          if (currentTicketId.current === ticketId) {
+          if (currentTicketId.current === listKey) {
             dispatch({ type: "LOAD_MESSAGES", payload: data.messages });
             setHasMore(data.hasMore);
             setLoading(false);
+            if (contactId) setConversationTicketIds(data.ticketIds);
           }
 
           if (pageNumber === 1 && data.messages.length > 1) {
@@ -356,9 +367,11 @@ const MessagesList = ({ ticketId, isGroup }) => {
     return () => {
       clearTimeout(delayDebounceFn);
     };
-  }, [pageNumber, ticketId]);
+  }, [pageNumber, ticketId, contactId, listKey]);
 
   useEffect(() => {
+    if (contactId) return undefined;
+
     const socket = openSocket();
 
     socket.on("connect", () => socket.emit("joinChatBox", ticketId));
@@ -377,7 +390,49 @@ const MessagesList = ({ ticketId, isGroup }) => {
     return () => {
       socket.disconnect();
     };
-  }, [ticketId]);
+  }, [ticketId, contactId]);
+
+  const conversationTicketIdsKey = conversationTicketIds.join(",");
+
+  useEffect(() => {
+    if (!contactId) return undefined;
+
+    const socket = openSocket();
+    // new messages arrive on "notification"; acks and deletes only on each
+    // ticket's room
+    const joinedTickets = new Set(
+      conversationTicketIdsKey ? conversationTicketIdsKey.split(",") : []
+    );
+
+    socket.on("connect", () => {
+      socket.emit("joinNotification");
+      joinedTickets.forEach((id) => socket.emit("joinChatBox", id));
+    });
+
+    socket.on("appMessage", (data) => {
+      if (data.action === "create") {
+        if (data.message?.ticket?.contactId !== Number(contactId)) return;
+
+        const newTicketId = String(data.message.ticketId);
+        if (!joinedTickets.has(newTicketId)) {
+          joinedTickets.add(newTicketId);
+          socket.emit("joinChatBox", newTicketId);
+        }
+
+        dispatch({ type: "ADD_MESSAGE", payload: data.message });
+        scrollToBottom();
+        if (onNewMessageRef.current) onNewMessageRef.current(data.message);
+      }
+
+      if (data.action === "update") {
+        dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [contactId, conversationTicketIdsKey]);
 
   const loadMore = () => {
     setPageNumber((prevPageNumber) => prevPageNumber + 1);
