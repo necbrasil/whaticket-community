@@ -55,6 +55,9 @@ import { sleep } from "../../../utils/sleep";
 import {
   handleMessage,
   handleMessageAck,
+  handleMessageEdit,
+  handleMessageRevoke,
+  handleMessageReaction,
   importHistoryChat,
   HistoryMessage,
   ContactPayload,
@@ -476,6 +479,29 @@ const unwrapMessage = (msg: WAMessage): WAMessage => {
     content = inner;
   }
   return content === msg.message ? msg : { ...msg, message: content };
+};
+
+// An edit arrives as a new message pointing to the original one
+const getMessageEdit = (
+  msg: WAMessage
+): { messageId: string; body: string } | undefined => {
+  const protocolMessage =
+    msg.message?.protocolMessage ||
+    msg.message?.editedMessage?.message?.protocolMessage;
+  if (
+    protocolMessage?.type !== proto.Message.ProtocolMessage.Type.MESSAGE_EDIT ||
+    !protocolMessage.key?.id ||
+    !protocolMessage.editedMessage
+  ) {
+    return undefined;
+  }
+
+  const body = getMessageBody({
+    ...msg,
+    message: normalizeMessageContent(protocolMessage.editedMessage)
+  } as WAMessage);
+
+  return { messageId: protocolMessage.key.id, body };
 };
 
 const shouldHandleMessage = (msg: WAMessage): boolean => {
@@ -986,6 +1012,7 @@ const removeSession = async (whatsappId: number): Promise<void> => {
     wbot.ev.removeAllListeners("blocklist.set");
     wbot.ev.removeAllListeners("blocklist.update");
     wbot.ev.removeAllListeners("messaging-history.set");
+    wbot.ev.removeAllListeners("messages.reaction");
 
     try {
       wbot.end(undefined);
@@ -1147,6 +1174,15 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
         messageType: Object.keys(msg.message || {}),
         rawMessage: JSON.stringify(msg, null, 2)
       });
+    });
+
+    messages.forEach(msg => {
+      const edit = getMessageEdit(msg);
+      if (edit) {
+        enqueueForChat(sessionId, msg.key.remoteJid || "", () =>
+          handleMessageEdit(edit.messageId, edit.body)
+        );
+      }
     });
 
     const validMessages = messages.map(unwrapMessage).filter(msg => {
@@ -1318,7 +1354,17 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     await Promise.all(
       updates.map(async event => {
         try {
-          if (!event.update.status || !event.key.id) return;
+          if (!event.key.id) return;
+
+          if (
+            event.update.messageStubType ===
+            proto.WebMessageInfo.StubType.REVOKE
+          ) {
+            await handleMessageRevoke(event.key.id);
+            return;
+          }
+
+          if (!event.update.status) return;
 
           await handleMessageAck(
             event.key.id,
@@ -1331,6 +1377,24 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
             messageId: event.key.id
           });
         }
+      })
+    );
+  });
+
+  wbot.ev.on("messages.reaction", async reactions => {
+    await Promise.all(
+      reactions.map(async ({ key, reaction }) => {
+        if (!key.id) return;
+
+        const reactorKey = reaction.key || {};
+        const reactorJid =
+          reactorKey.participant || reactorKey.remoteJid || "";
+
+        await handleMessageReaction(key.id, {
+          emoji: reaction.text || "",
+          jid: reactorJid ? jidNormalizedUser(reactorJid) : "",
+          fromMe: Boolean(reactorKey.fromMe)
+        });
       })
     );
   });

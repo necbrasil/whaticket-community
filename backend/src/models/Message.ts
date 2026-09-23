@@ -13,6 +13,13 @@ import {
 import Contact from "./Contact";
 import Ticket from "./Ticket";
 
+export interface MessageReaction {
+  emoji: string;
+  // who reacted: contact / participant jid, or ours when fromMe
+  jid: string;
+  fromMe: boolean;
+}
+
 @Table
 class Message extends Model<Message> {
   @PrimaryKey
@@ -50,6 +57,28 @@ class Message extends Model<Message> {
   @Default(false)
   @Column
   isDeleted: boolean;
+
+  @Default(false)
+  @Column
+  isEdited: boolean;
+
+  @Column(DataType.TEXT)
+  get reactions(): MessageReaction[] {
+    const value = this.getDataValue("reactions") as unknown as string | null;
+    if (!value) return [];
+    try {
+      return JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+
+  set reactions(value: MessageReaction[]) {
+    this.setDataValue(
+      "reactions",
+      (value.length ? JSON.stringify(value) : null) as unknown as MessageReaction[]
+    );
+  }
 
   @CreatedAt
   @Column(DataType.DATE(6))

@@ -10,7 +10,7 @@ import formatBody from "../helpers/Mustache";
 
 import Contact from "../models/Contact";
 import Ticket from "../models/Ticket";
-import Message from "../models/Message";
+import Message, { MessageReaction } from "../models/Message";
 
 import CreateMessageService from "../services/MessageServices/CreateMessageService";
 import CreateOrUpdateContactService from "../services/ContactServices/CreateOrUpdateContactService";
@@ -451,6 +451,78 @@ export const importHistoryChat = async ({
   /* eslint-enable no-restricted-syntax, no-await-in-loop */
 
   return imported;
+};
+
+// Reloads a message as the panel renders it and pushes it to the open chats
+// and to the conversations list.
+const emitMessageUpdate = async (messageId: string): Promise<void> => {
+  const message = await Message.findByPk(messageId, {
+    include: [
+      "contact",
+      {
+        model: Message,
+        as: "quotedMsg",
+        include: ["contact"]
+      }
+    ]
+  });
+  if (!message) return;
+
+  getIO()
+    .to(message.ticketId.toString())
+    .to("notification")
+    .emit("appMessage", { action: "update", message });
+};
+
+// The sender edited the message on WhatsApp.
+export const handleMessageEdit = async (
+  messageId: string,
+  body: string
+): Promise<void> => {
+  try {
+    const message = await Message.findByPk(messageId);
+    if (!message || !body) return;
+
+    await message.update({ body, isEdited: true });
+    await emitMessageUpdate(messageId);
+  } catch (err) {
+    logger.error({ info: "Error handling message edit", err, messageId });
+  }
+};
+
+// The sender deleted the message for everyone on WhatsApp. The text is kept
+// (marked as deleted) so the team still knows what was said.
+export const handleMessageRevoke = async (messageId: string): Promise<void> => {
+  try {
+    const message = await Message.findByPk(messageId);
+    if (!message || message.isDeleted) return;
+
+    await message.update({ isDeleted: true });
+    await emitMessageUpdate(messageId);
+  } catch (err) {
+    logger.error({ info: "Error handling message revoke", err, messageId });
+  }
+};
+
+// Someone reacted to a message; an empty emoji removes their reaction.
+export const handleMessageReaction = async (
+  messageId: string,
+  reaction: MessageReaction
+): Promise<void> => {
+  try {
+    const message = await Message.findByPk(messageId);
+    if (!message) return;
+
+    const others = message.reactions.filter(
+      r => !(r.fromMe === reaction.fromMe && r.jid === reaction.jid)
+    );
+    message.reactions = reaction.emoji ? [...others, reaction] : others;
+    await message.save();
+
+    await emitMessageUpdate(messageId);
+  } catch (err) {
+    logger.error({ info: "Error handling message reaction", err, messageId });
+  }
 };
 
 export const handleMessageAck = async (

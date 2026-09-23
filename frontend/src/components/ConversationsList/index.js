@@ -159,10 +159,13 @@ const reducer = (state, action) => {
       const rest = state.filter((c) => c.contact.id !== conversation.contact.id);
       return [{ ...conversation, unread }, ...rest];
     }
-    case "UPDATE_ACK": {
-      const { id, ack } = action.payload;
+    case "UPDATE_LAST_MESSAGE": {
+      // ack changes and edits of the message shown in the preview
+      const { id, ack, body } = action.payload;
       return state.map((c) =>
-        c.lastMessageId === id ? { ...c, lastMessageAck: ack } : c
+        c.lastMessageId === id
+          ? { ...c, lastMessageAck: ack, lastMessage: body }
+          : c
       );
     }
     case "UPDATE": {
@@ -268,8 +271,12 @@ const ConversationsList = ({ selectedContactId }) => {
     socket.on("appMessage", (data) => {
       if (data.action === "update" && data.message) {
         dispatch({
-          type: "UPDATE_ACK",
-          payload: { id: data.message.id, ack: data.message.ack },
+          type: "UPDATE_LAST_MESSAGE",
+          payload: {
+            id: data.message.id,
+            ack: data.message.ack,
+            body: data.message.body,
+          },
         });
         return;
       }

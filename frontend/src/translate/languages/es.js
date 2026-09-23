@@ -403,6 +403,7 @@ const messages = {
         },
       },
       messagesList: {
+        edited: "editado",
         header: {
           assignedTo: "Asignado a:",
           buttons: {
@@ -414,6 +415,7 @@ const messages = {
         },
       },
       messagesInput: {
+        captionPlaceholder: "Añade un comentario",
         placeholderOpen: "Escriba un mensaje o presione '' / '' para usar las respuestas rápidas registradas",
         placeholderClosed:
           "Vuelva a abrir o acepte este ticket para enviar un mensaje.",

@@ -19,6 +19,8 @@ type MessageData = {
   fromMe: boolean;
   read: boolean;
   quotedMsg?: Message;
+  // attachments only: sent as the first file's caption
+  caption?: string;
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
@@ -37,7 +39,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
-  const { body, quotedMsg }: MessageData = req.body;
+  const { body, quotedMsg, caption }: MessageData = req.body;
   const medias = req.files as Express.Multer.File[];
 
   const ticket = await ShowTicketService(ticketId);
@@ -46,8 +48,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   if (medias) {
     await Promise.all(
-      medias.map(async (media: Express.Multer.File) => {
-        await SendWhatsAppMedia({ media, ticket });
+      medias.map(async (media: Express.Multer.File, index: number) => {
+        await SendWhatsAppMedia({
+          media,
+          ticket,
+          body: index === 0 ? caption : undefined
+        });
       })
     );
   } else {

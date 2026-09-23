@@ -402,6 +402,7 @@ const messages = {
         },
       },
       messagesList: {
+        edited: "editada",
         header: {
           assignedTo: "Atribuído à:",
           buttons: {
@@ -413,6 +414,7 @@ const messages = {
         },
       },
       messagesInput: {
+        captionPlaceholder: "Adicione uma legenda",
         placeholderOpen: "Digite uma mensagem ou tecle ''/'' para utilizar as respostas rápidas cadastrada",
         placeholderClosed:
           "Reabra ou aceite esse ticket para enviar uma mensagem.",

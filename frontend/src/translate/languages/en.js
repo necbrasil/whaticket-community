@@ -398,6 +398,7 @@ const messages = {
         },
       },
       messagesList: {
+        edited: "edited",
         header: {
           assignedTo: "Assigned to:",
           buttons: {
@@ -409,6 +410,7 @@ const messages = {
         },
       },
       messagesInput: {
+        captionPlaceholder: "Add a caption",
         placeholderOpen: "Type a message or press ''/'' to use the registered quick responses",
         placeholderClosed: "Reopen or accept this ticket to send a message.",
         signMessage: "Sign",

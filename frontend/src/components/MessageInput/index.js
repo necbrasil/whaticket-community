@@ -97,6 +97,27 @@ const useStyles = makeStyles(theme => ({
     display: "none",
   },
 
+  mediaCaptionWrapper: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    minWidth: 0,
+    margin: "0 8px",
+    padding: "4px 12px",
+    background: "#fff",
+    borderRadius: 20,
+  },
+
+  mediaFileName: {
+    flex: "none",
+    maxWidth: "40%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    marginRight: 8,
+    color: "grey",
+  },
+
   viewMediaInputWrapper: {
     display: "flex",
     padding: "10px 13px",
@@ -222,6 +243,7 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
     getTicketId ? getTicketId() : ticketId;
 
   const [medias, setMedias] = useState([]);
+  const [caption, setCaption] = useState("");
   const [inputMessage, setInputMessage] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -246,6 +268,7 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
       setInputMessage("");
       setShowEmoji(false);
       setMedias([]);
+      setCaption("");
       setReplyingMessage(null);
     };
   }, [ticketId, resetKey, setReplyingMessage]);
@@ -290,6 +313,12 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
       formData.append("medias", media);
       formData.append("body", media.name);
     });
+    if (caption.trim()) {
+      formData.append(
+        "caption",
+        signMessage ? `*${user?.name}:* ${caption.trim()}` : caption.trim()
+      );
+    }
 
     try {
       await api.post(`/messages/${await resolveTicketId()}`, formData);
@@ -299,6 +328,7 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
 
     setLoading(false);
     setMedias([]);
+    setCaption("");
   };
 
   const handleSendMessage = async () => {
@@ -448,7 +478,10 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
         <IconButton
           aria-label="cancel-upload"
           component="span"
-          onClick={e => setMedias([])}
+          onClick={e => {
+            setMedias([]);
+            setCaption("");
+          }}
         >
           <CancelIcon className={classes.sendMessageIcons} />
         </IconButton>
@@ -458,10 +491,23 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
             <CircularProgress className={classes.circleLoading} />
           </div>
         ) : (
-          <span>
-            {medias[0]?.name}
-            {/* <img src={media.preview} alt=""></img> */}
-          </span>
+          <div className={classes.mediaCaptionWrapper}>
+            <span className={classes.mediaFileName}>
+              {medias.length > 1
+                ? `${medias[0]?.name} +${medias.length - 1}`
+                : medias[0]?.name}
+            </span>
+            <InputBase
+              autoFocus
+              fullWidth
+              placeholder={i18n.t("messagesInput.captionPlaceholder")}
+              value={caption}
+              onChange={e => setCaption(e.target.value)}
+              onKeyPress={e => {
+                if (e.key === "Enter" && !loading) handleUploadMedia(e);
+              }}
+            />
+          </div>
         )}
         <IconButton
           aria-label="send-upload"

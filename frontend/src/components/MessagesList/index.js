@@ -29,6 +29,7 @@ import MessageOptionsMenu from "../MessageOptionsMenu";
 import whatsBackground from "../../assets/wa-background.png";
 
 import api from "../../services/api";
+import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import Audio from "../Audio";
 
@@ -188,6 +189,32 @@ const useStyles = makeStyles((theme) => ({
   textContentItem: {
     overflowWrap: "break-word",
     padding: "3px 80px 6px 6px",
+  },
+
+  textContentItemEdited: {
+    paddingRight: 130,
+  },
+
+  editedLabel: {
+    fontStyle: "italic",
+    marginRight: 4,
+  },
+
+  reactions: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    margin: "0 0 6px 6px",
+    padding: "1px 6px",
+    fontSize: 13,
+    background: "#fff",
+    borderRadius: 12,
+    boxShadow: "0 1px 1px #b3b3b3",
+  },
+
+  reactionCount: {
+    fontSize: 11,
+    color: "#666",
   },
 
   textContentItemDeleted: {
@@ -645,6 +672,36 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
     );
   };
 
+  const renderEditedLabel = (message) =>
+    message.isEdited ? (
+      <span className={classes.editedLabel}>
+        {i18n.t("messagesList.edited")}
+      </span>
+    ) : null;
+
+  // same emoji from several people shows once, with the count
+  const renderReactions = (message) => {
+    if (!message.reactions?.length) return null;
+
+    const counts = message.reactions.reduce((acc, { emoji }) => {
+      acc[emoji] = (acc[emoji] || 0) + 1;
+      return acc;
+    }, {});
+
+    return (
+      <div className={classes.reactions}>
+        {Object.entries(counts).map(([emoji, count]) => (
+          <span key={emoji}>
+            {emoji}
+            {count > 1 && (
+              <span className={classes.reactionCount}>{count}</span>
+            )}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const renderMessages = () => {
     if (messagesList.length > 0) {
       const viewMessagesList = messagesList.map((message, index) => {
@@ -672,13 +729,27 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
                 {(message.mediaUrl || message.mediaType === "location" || message.mediaType === "vcard"
                   //|| message.mediaType === "multi_vcard" 
                 ) && checkMessageMedia(message)}
-                <div className={classes.textContentItem}>
+                <div
+                  className={clsx(classes.textContentItem, {
+                    [classes.textContentItemDeleted]: message.isDeleted,
+                    [classes.textContentItemEdited]: message.isEdited,
+                  })}
+                >
+                  {message.isDeleted && (
+                    <Block
+                      color="disabled"
+                      fontSize="small"
+                      className={classes.deletedIcon}
+                    />
+                  )}
                   {message.quotedMsg && renderQuotedMessage(message)}
                   <MarkdownWrapper>{message.body}</MarkdownWrapper>
                   <span className={classes.timestamp}>
+                    {renderEditedLabel(message)}
                     {format(parseISO(message.createdAt), "HH:mm")}
                   </span>
                 </div>
+                {renderReactions(message)}
               </div>
             </React.Fragment>
           );
@@ -704,6 +775,7 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
                 <div
                   className={clsx(classes.textContentItem, {
                     [classes.textContentItemDeleted]: message.isDeleted,
+                    [classes.textContentItemEdited]: message.isEdited,
                   })}
                 >
                   {message.isDeleted && (
@@ -716,10 +788,12 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
                   {message.quotedMsg && renderQuotedMessage(message)}
                   <MarkdownWrapper>{message.body}</MarkdownWrapper>
                   <span className={classes.timestamp}>
+                    {renderEditedLabel(message)}
                     {format(parseISO(message.createdAt), "HH:mm")}
                     {renderMessageAck(message)}
                   </span>
                 </div>
+                {renderReactions(message)}
               </div>
             </React.Fragment>
           );
