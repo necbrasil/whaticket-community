@@ -42,13 +42,22 @@ const useStyles = makeStyles(theme => ({
 	},
 }));
 
+// Whether the message's chat is the one open on a visible tab. Read at event
+// time: this component doesn't re-render on route changes.
+const isOnScreen = ({ message, ticket }) => {
+	if (document.visibilityState !== "visible") return false;
+
+	const [, page, id] = window.location.pathname.split("/");
+	if (page === "conversations") return +id === ticket.contactId;
+	if (page === "tickets") return +id === message.ticketId;
+	return false;
+};
+
 const NotificationsPopOver = () => {
 	const classes = useStyles();
 
 	const history = useHistory();
 	const { user } = useContext(AuthContext);
-	const ticketIdUrl = +history.location.pathname.split("/")[2];
-	const ticketIdRef = useRef(ticketIdUrl);
 	const anchorEl = useRef();
 	const [isOpen, setIsOpen] = useState(false);
 	const [notifications, setNotifications] = useState([]);
@@ -74,10 +83,6 @@ const NotificationsPopOver = () => {
 	useEffect(() => {
 		setNotifications(tickets);
 	}, [tickets]);
-
-	useEffect(() => {
-		ticketIdRef.current = ticketIdUrl;
-	}, [ticketIdUrl]);
 
 	useEffect(() => {
 		const socket = openSocket();
@@ -110,11 +115,9 @@ const NotificationsPopOver = () => {
 		});
 
 		socket.on("appMessage", data => {
-			if (
-				data.action === "create" &&
-				!data.message.read &&
-				(data.ticket.userId === user?.id || !data.ticket.userId)
-			) {
+			if (data.action !== "create" || data.message.read) return;
+
+			if (data.ticket.userId === user?.id || !data.ticket.userId) {
 				setNotifications(prevState => {
 					const ticketIndex = prevState.findIndex(t => t.id === data.ticket.id);
 					if (ticketIndex !== -1) {
@@ -123,17 +126,13 @@ const NotificationsPopOver = () => {
 					}
 					return [data.ticket, ...prevState];
 				});
-
-				const shouldNotNotificate =
-					(data.message.ticketId === ticketIdRef.current &&
-						document.visibilityState === "visible") ||
-					(data.ticket.userId && data.ticket.userId !== user?.id) ||
-					data.ticket.isGroup;
-
-				if (shouldNotNotificate) return;
-
-				handleNotifications(data);
 			}
+
+			// shared inbox: everyone is alerted of every incoming message (groups
+			// and other agents' tickets included), unless it's already on screen
+			if (data.message.fromMe || isOnScreen(data)) return;
+
+			handleNotifications(data);
 		});
 
 		return () => {
@@ -143,6 +142,18 @@ const NotificationsPopOver = () => {
 
 	const handleNotifications = data => {
 		const { message, contact, ticket } = data;
+
+		// before the desktop notification: that throws where it isn't supported
+		// (e.g. mobile browsers) and the sound must play anyway
+		try {
+			soundAlertRef.current();
+		} catch (err) {
+			console.log("Could not play notification sound", err);
+		}
+
+		if (!("Notification" in window) || Notification.permission !== "granted") {
+			return;
+		}
 
 		const options = {
 			body: `${message.body} - ${format(new Date(), "HH:mm")}`,
@@ -159,7 +170,7 @@ const NotificationsPopOver = () => {
 		notification.onclick = e => {
 			e.preventDefault();
 			window.focus();
-			historyRef.current.push(`/tickets/${ticket.id}`);
+			historyRef.current.push(`/conversations/${ticket.contactId}`);
 		};
 
 		setDesktopNotifications(prevState => {
@@ -172,8 +183,6 @@ const NotificationsPopOver = () => {
 			}
 			return [notification, ...prevState];
 		});
-
-		soundAlertRef.current();
 	};
 
 	const handleClick = () => {
