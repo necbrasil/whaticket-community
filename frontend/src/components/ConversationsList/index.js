@@ -153,8 +153,9 @@ const mediaLabel = (mediaType) =>
     ? i18n.t(`conversations.media.${mediaType}`, { defaultValue: "" })
     : "";
 
-// "*Name:*\n" is the signature added by the message input
-const stripSignature = (body) => body.replace(/^\*[^*\n]+:\*\n/, "");
+// "*Name:* " is the signature added by the message input (older messages have
+// a line break after it)
+const stripSignature = (body) => body.replace(/^\*[^*\n]+:\*[ \n]/, "");
 
 const formatPreview = (conversation) => {
   const body = stripSignature(conversation.lastMessage || "").replace(
