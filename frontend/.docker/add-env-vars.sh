@@ -31,9 +31,8 @@ _addSslConfig() {
     fi;
 }
 
-if [ -z "${URL_BACKEND}" ]; then
-    echo "ERROR: URL_BACKEND is not set (expected <backend-host>:3000)" >&2
-    exit 1
+if [ -z "${VITE_BACKEND_URL}" ]; then
+    echo "WARNING: VITE_BACKEND_URL is not set, the app won't reach the backend" >&2
 fi;
 
 _writeFrontendEnvVars;

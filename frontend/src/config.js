@@ -1,10 +1,8 @@
 function getConfig(name, defaultValue = null) {
-  // If inside a docker container, use window.ENV
-  if (window.ENV !== undefined) {
-    return window.ENV[name] || defaultValue;
-  }
+  // If inside a docker container, prefer window.ENV, then build-time env
+  const runtimeValue = window.ENV !== undefined ? window.ENV[name] : undefined;
 
-  return import.meta.env[name] || defaultValue;
+  return runtimeValue || import.meta.env[name] || defaultValue;
 }
 
 export function getBackendUrl() {
