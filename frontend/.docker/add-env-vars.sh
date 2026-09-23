@@ -31,6 +31,11 @@ _addSslConfig() {
     fi;
 }
 
+if [ -z "${URL_BACKEND}" ]; then
+    echo "ERROR: URL_BACKEND is not set (expected <backend-host>:3000)" >&2
+    exit 1
+fi;
+
 _writeFrontendEnvVars;
 _writeNginxEnvVars;
 
