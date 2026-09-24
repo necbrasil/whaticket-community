@@ -35,6 +35,7 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import NodeCache from "node-cache";
 
 import Whatsapp from "../../../models/Whatsapp";
+import Contact from "../../../models/Contact";
 import { getIO } from "../../../libs/socket";
 import { logger } from "../../../utils/logger";
 import AppError from "../../../errors/AppError";
@@ -849,6 +850,65 @@ const convertToMediaPayload = async (
   }
 };
 
+const getMentionedJids = (msg: WAMessage): string[] => {
+  const content = msg.message || {};
+  const contextInfo =
+    content.extendedTextMessage?.contextInfo ||
+    content.imageMessage?.contextInfo ||
+    content.videoMessage?.contextInfo ||
+    content.documentMessage?.contextInfo;
+  return contextInfo?.mentionedJid || [];
+};
+
+// Readable name for a mentioned jid: saved contact, then WhatsApp's own name
+// for it, then the phone number. A LID alone isn't readable, so it's kept.
+const getMentionName = async (
+  jid: string,
+  user: string,
+  wbot: Session
+): Promise<string | undefined> => {
+  const isLid = isLidUser(jid);
+
+  const me = wbot.user as { id?: string; lid?: string; name?: string };
+  const ownUsers = [me?.id, me?.lid].map(own => own && jidDecode(own)?.user);
+  if (me?.name && ownUsers.includes(user)) return me.name;
+
+  const contact = await Contact.findOne({
+    where: isLid ? { lid: `${user}@lid` } : { number: user }
+  });
+  if (contact?.name && contact.name !== user) return contact.name;
+
+  const stored = wbot.store?.contacts?.[jidNormalizedUser(jid)];
+  const storedName = stored?.name || stored?.notify;
+  if (storedName) return storedName;
+
+  if (contact && !isLid) return contact.number;
+  return isLid ? undefined : user;
+};
+
+// WhatsApp writes mentions as "@<number or LID>"; show the person's name
+const resolveMentions = async (
+  body: string,
+  msg: WAMessage,
+  wbot: Session
+): Promise<string> => {
+  const jids = getMentionedJids(msg);
+  if (!body || jids.length === 0) return body;
+
+  let result = body;
+  /* eslint-disable no-restricted-syntax, no-await-in-loop */
+  for (const jid of jids) {
+    const user = jidDecode(jid)?.user;
+    if (user && result.includes(`@${user}`)) {
+      const name = await getMentionName(jid, user, wbot);
+      if (name) result = result.split(`@${user}`).join(`@${name}`);
+    }
+  }
+  /* eslint-enable no-restricted-syntax, no-await-in-loop */
+
+  return result;
+};
+
 const getMessageData = async (
   msg: WAMessage,
   wbot: Session
@@ -871,6 +931,7 @@ const getMessageData = async (
 
   const contactPayload = await convertToContactPayload(contactJid, msg, wbot);
   const messagePayload = convertToMessagePayload(msg);
+  messagePayload.body = await resolveMentions(messagePayload.body, msg, wbot);
   const mediaPayload = await convertToMediaPayload(msg, wbot);
 
   const contextPayload: WhatsappContextPayload = {
@@ -954,7 +1015,10 @@ const importHistory = async (
         }
 
         historyMessages.push({
-          message: convertToMessagePayload(msg),
+          message: {
+            ...convertToMessagePayload(msg),
+            body: await resolveMentions(getMessageBody(msg), msg, wbot)
+          },
           sender,
           downloadMedia: hasMedia(msg)
             ? () => convertToMediaPayload(msg, wbot)

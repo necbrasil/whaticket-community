@@ -1,5 +1,5 @@
-import React from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect } from "react";
+import { useHistory, useParams } from "react-router-dom";
 
 import Grid from "@material-ui/core/Grid";
 import Paper from "@material-ui/core/Paper";
@@ -56,7 +56,25 @@ const useStyles = makeStyles((theme) => ({
 
 const Conversations = () => {
   const classes = useStyles();
+  const history = useHistory();
   const { contactId } = useParams();
+
+  // Esc closes the open conversation, like WhatsApp Web. Dialogs (contact,
+  // new conversation, image preview) handle their own Esc first.
+  useEffect(() => {
+    if (!contactId) return undefined;
+
+    const handleKeyDown = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"], [role="presentation"]')) {
+        return;
+      }
+      history.push("/conversations");
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [contactId, history]);
 
   return (
     <div className={classes.container}>
