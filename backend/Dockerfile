@@ -3,9 +3,10 @@ FROM node:20-bookworm-slim
 # git: whatsapp-web.js is installed from GitHub
 # chromium + fonts: used by whatsapp-web.js (puppeteer)
 # netcat: wait for the database before running migrations
+# ffmpeg: converts recorded audio to OGG/Opus voice notes
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-      git ca-certificates dumb-init netcat-openbsd \
+      git ca-certificates dumb-init netcat-openbsd ffmpeg \
       chromium fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
     && rm -rf /var/lib/apt/lists/*
 

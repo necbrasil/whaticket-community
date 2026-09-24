@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import { Picker } from "emoji-mart";
 import clsx from "clsx";
 
-import { makeStyles } from "@material-ui/core/styles";
+import { makeStyles, useTheme } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
 import InputBase from "@material-ui/core/InputBase";
 import CircularProgress from "@material-ui/core/CircularProgress";
@@ -51,9 +51,14 @@ const initRecorder = async () => {
   return Mp3Recorder;
 };
 
-const useStyles = makeStyles(theme => ({
+// dark colors follow WhatsApp Web's dark theme
+const useStyles = makeStyles(theme => {
+  const dark = theme.palette.type === "dark";
+  const barColor = dark ? "#202c33" : "#eee";
+  const fieldColor = dark ? "#2a3942" : "#fff";
+  return {
   mainWrapper: {
-    background: "#eee",
+    background: barColor,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -66,7 +71,7 @@ const useStyles = makeStyles(theme => ({
   },
 
   newMessageBox: {
-    background: "#eee",
+    background: barColor,
     width: "100%",
     display: "flex",
     padding: "7px",
@@ -76,7 +81,7 @@ const useStyles = makeStyles(theme => ({
   messageInputWrapper: {
     padding: 6,
     marginRight: 7,
-    background: "#fff",
+    background: fieldColor,
     display: "flex",
     borderRadius: 20,
     flex: 1,
@@ -104,7 +109,7 @@ const useStyles = makeStyles(theme => ({
     minWidth: 0,
     margin: "0 8px",
     padding: "4px 12px",
-    background: "#fff",
+    background: fieldColor,
     borderRadius: 20,
   },
 
@@ -124,7 +129,7 @@ const useStyles = makeStyles(theme => ({
     position: "relative",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#eee",
+    backgroundColor: barColor,
     borderTop: "1px solid rgba(0, 0, 0, 0.12)",
   },
 
@@ -177,7 +182,7 @@ const useStyles = makeStyles(theme => ({
     flex: 1,
     marginRight: 5,
     overflowY: "hidden",
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
+    backgroundColor: dark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.05)",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -212,9 +217,9 @@ const useStyles = makeStyles(theme => ({
     margin: 0,
     position: "absolute",
     bottom: "50px",
-    background: "#ffffff",
+    background: dark ? "#233138" : "#ffffff",
     padding: "2px",
-    border: "1px solid #CCC",
+    border: dark ? "1px solid #3b4a54" : "1px solid #CCC",
     left: 0,
     width: "100%",
     "& li": {
@@ -226,18 +231,20 @@ const useStyles = makeStyles(theme => ({
         overflow: "hidden",
         maxHeight: "32px",
         "&:hover": {
-          background: "#F1F1F1",
+          background: dark ? "#2a3942" : "#F1F1F1",
           cursor: "pointer",
         },
       },
     },
   },
-}));
+  };
+});
 
 // Outside a ticket route (conversations page) the caller passes getTicketId,
 // resolved on each send, and resetKey to clear the input when the chat changes.
 const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
   const classes = useStyles();
+  const theme = useTheme();
   const { ticketId } = useParams();
   const resolveTicketId = async () =>
     getTicketId ? getTicketId() : ticketId;
@@ -537,6 +544,7 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
               <div className={classes.emojiBox}>
                 <ClickAwayListener onClickAway={e => setShowEmoji(false)}>
                   <Picker
+                    theme={theme.palette.type}
                     perLine={16}
                     showPreview={false}
                     showSkinTones={false}

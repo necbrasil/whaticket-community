@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useReducer, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useReducer,
+  useRef,
+  useContext,
+} from "react";
 
 import { isSameDay, parseISO, format } from "date-fns";
 import openSocket from "../../services/socket-io";
@@ -32,8 +38,12 @@ import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import Audio from "../Audio";
+import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
 
-const useStyles = makeStyles((theme) => ({
+// dark colors follow WhatsApp Web's dark theme
+const useStyles = makeStyles((theme) => {
+  const dark = theme.palette.type === "dark";
+  return {
   messagesListWrapper: {
     overflow: "hidden",
     position: "relative",
@@ -43,7 +53,8 @@ const useStyles = makeStyles((theme) => ({
   },
 
   messagesList: {
-    backgroundImage: `url(${whatsBackground})`,
+    backgroundImage: dark ? "none" : `url(${whatsBackground})`,
+    backgroundColor: dark ? "#0b141a" : undefined,
     display: "flex",
     flexDirection: "column",
     flexGrow: 1,
@@ -80,8 +91,8 @@ const useStyles = makeStyles((theme) => ({
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: "#ffffff",
-    color: "#303030",
+    backgroundColor: dark ? "#202c33" : "#ffffff",
+    color: dark ? "#e9edef" : "#303030",
     alignSelf: "flex-start",
     borderTopLeftRadius: 0,
     borderTopRightRadius: 8,
@@ -91,13 +102,13 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: dark ? "none" : "0 1px 1px #b3b3b3",
   },
 
   quotedContainerLeft: {
     margin: "-3px -80px 6px -6px",
     overflow: "hidden",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: dark ? "#1d282f" : "#f0f0f0",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -134,8 +145,8 @@ const useStyles = makeStyles((theme) => ({
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: "#dcf8c6",
-    color: "#303030",
+    backgroundColor: dark ? "#005c4b" : "#dcf8c6",
+    color: dark ? "#e9edef" : "#303030",
     alignSelf: "flex-end",
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
@@ -145,13 +156,13 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: dark ? "none" : "0 1px 1px #b3b3b3",
   },
 
   quotedContainerRight: {
     margin: "-3px -80px 6px -6px",
     overflowY: "hidden",
-    backgroundColor: "#cfe9ba",
+    backgroundColor: dark ? "#025144" : "#cfe9ba",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -207,19 +218,19 @@ const useStyles = makeStyles((theme) => ({
     margin: "0 0 6px 6px",
     padding: "1px 6px",
     fontSize: 13,
-    background: "#fff",
+    background: dark ? "#202c33" : "#fff",
     borderRadius: 12,
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: dark ? "none" : "0 1px 1px #b3b3b3",
   },
 
   reactionCount: {
     fontSize: 11,
-    color: "#666",
+    color: dark ? "#8696a0" : "#666",
   },
 
   textContentItemDeleted: {
     fontStyle: "italic",
-    color: "rgba(0, 0, 0, 0.36)",
+    color: dark ? "rgba(233, 237, 239, 0.45)" : "rgba(0, 0, 0, 0.36)",
     overflowWrap: "break-word",
     padding: "3px 80px 6px 6px",
   },
@@ -239,7 +250,7 @@ const useStyles = makeStyles((theme) => ({
     position: "absolute",
     bottom: 0,
     right: 5,
-    color: "#999",
+    color: dark ? "#8696a0" : "#999",
   },
 
   dailyTimestamp: {
@@ -247,14 +258,14 @@ const useStyles = makeStyles((theme) => ({
     textAlign: "center",
     alignSelf: "center",
     width: "110px",
-    backgroundColor: "#e1f3fb",
+    backgroundColor: dark ? "#182229" : "#e1f3fb",
     margin: "10px",
     borderRadius: "10px",
     boxShadow: "0 1px 1px #b3b3b3",
   },
 
   dailyTimestampText: {
-    color: "#808888",
+    color: dark ? "#8696a0" : "#808888",
     padding: 8,
     alignSelf: "center",
     marginLeft: "0px",
@@ -286,7 +297,8 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: "inherit",
     padding: 10,
   },
-}));
+  };
+});
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_MESSAGES") {
@@ -344,6 +356,7 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [conversationTicketIds, setConversationTicketIds] = useState([]);
+  const { setReplyingMessage } = useContext(ReplyMessageContext);
   const lastMessageRef = useRef();
 
   const [selectedMessage, setSelectedMessage] = useState({});
@@ -672,6 +685,13 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
     );
   };
 
+  // double click on a message = "Reply", like WhatsApp Web
+  const handleReplyOnDoubleClick = (message) => {
+    if (message.isDeleted) return;
+    window.getSelection()?.removeAllRanges();
+    setReplyingMessage(message);
+  };
+
   const renderEditedLabel = (message) =>
     message.isEdited ? (
       <span className={classes.editedLabel}>
@@ -710,7 +730,10 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
             <React.Fragment key={message.id}>
               {renderDailyTimestamps(message, index)}
               {renderMessageDivider(message, index)}
-              <div className={classes.messageLeft}>
+              <div
+                className={classes.messageLeft}
+                onDoubleClick={() => handleReplyOnDoubleClick(message)}
+              >
                 <IconButton
                   variant="contained"
                   size="small"
@@ -758,7 +781,10 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
             <React.Fragment key={message.id}>
               {renderDailyTimestamps(message, index)}
               {renderMessageDivider(message, index)}
-              <div className={classes.messageRight}>
+              <div
+                className={classes.messageRight}
+                onDoubleClick={() => handleReplyOnDoubleClick(message)}
+              >
                 <IconButton
                   variant="contained"
                   size="small"

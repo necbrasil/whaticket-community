@@ -57,7 +57,7 @@ const useStyles = makeStyles((theme) => ({
   header: {
     display: "flex",
     alignItems: "center",
-    backgroundColor: "#eee",
+    backgroundColor: theme.palette.type === "dark" ? "#202c33" : "#eee",
     flex: "none",
     borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
   },

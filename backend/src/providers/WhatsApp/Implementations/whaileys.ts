@@ -53,6 +53,7 @@ import {
 } from "../types";
 import { WhatsappProvider } from "../whatsappProvider";
 import { sleep } from "../../../utils/sleep";
+import convertToVoiceNote from "../../../utils/convertToVoiceNote";
 import {
   handleMessage,
   handleMessageAck,
@@ -1603,6 +1604,24 @@ const sendMedia = async (
     ? { stanzaId: options.quotedMessageId, participant: toJid }
     : undefined;
 
+  let audioBuffer = mediaBuffer;
+  let audioMimetype = media.mimetype;
+  let ptt = Boolean(options?.sendAudioAsVoice);
+  if (media.mimetype.startsWith("audio/") && ptt) {
+    if (media.mimetype.includes("ogg")) {
+      audioMimetype = "audio/ogg; codecs=opus";
+    } else {
+      try {
+        audioBuffer = await convertToVoiceNote(mediaBuffer);
+        audioMimetype = "audio/ogg; codecs=opus";
+      } catch (err) {
+        // still deliver it, as a regular audio file instead of a voice note
+        logger.warn({ info: "Could not convert audio to voice note", err });
+        ptt = false;
+      }
+    }
+  }
+
   const buildPayload = () => {
     const base = {
       caption: options?.caption,
@@ -1625,11 +1644,10 @@ const sendMedia = async (
     }
 
     if (media.mimetype.startsWith("audio/")) {
-      const ptt = Boolean(options?.sendAudioAsVoice);
       return {
         message: {
-          audio: mediaBuffer,
-          mimetype: media.mimetype,
+          audio: audioBuffer,
+          mimetype: audioMimetype,
           ptt,
           contextInfo
         },

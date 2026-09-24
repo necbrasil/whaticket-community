@@ -1,12 +1,14 @@
-import React, { createContext, useState, useContext, useMemo } from "react";
+import React, { createContext, useContext, useMemo } from "react";
 import PropTypes from "prop-types";
 import { createMuiTheme, ThemeProvider as MUIThemeProvider } from "@material-ui/core/styles";
 import { CssBaseline } from "@material-ui/core";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-  const [darkMode, setDarkMode] = useState(false);
+  // remembered per browser, so a reload doesn't switch back to light
+  const [darkMode, setDarkMode] = useLocalStorage("darkMode", false);
 
   const toggleTheme = () => {
     setDarkMode((prevMode) => !prevMode);
