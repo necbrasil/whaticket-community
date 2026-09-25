@@ -1,4 +1,7 @@
-import { readFileSync } from "fs";
+import { readFileSync, createWriteStream, unlink } from "fs";
+import { join } from "path";
+import { pipeline, Transform } from "stream";
+import { promisify } from "util";
 
 import pino from "pino";
 import makeWASocket, {
@@ -54,6 +57,7 @@ import {
 import { WhatsappProvider } from "../whatsappProvider";
 import { sleep } from "../../../utils/sleep";
 import convertToVoiceNote from "../../../utils/convertToVoiceNote";
+import uploadConfig from "../../../config/upload";
 import {
   handleMessage,
   handleMessageAck,
@@ -67,6 +71,8 @@ import {
   MediaPayload,
   WhatsappContextPayload
 } from "../../../handlers/handleWhatsappEvents";
+
+const pipelineAsync = promisify(pipeline);
 
 type WALogger = NonNullable<Parameters<typeof makeInMemoryStore>[0]["logger"]>;
 
@@ -764,83 +770,83 @@ const convertToContactPayload = async (
   };
 };
 
+const getMediaInfo = (
+  msg: WAMessage
+): { filename: string; mimetype: string } => {
+  const messageType = getContentType(msg.message || undefined);
+  const getExtension = (mimetype: string, fallback: string): string =>
+    mimetype.split("/")[1]?.split(";")[0] || fallback;
+
+  if (messageType === "imageMessage") {
+    const mimetype = msg.message?.imageMessage?.mimetype || "image/jpeg";
+    return {
+      filename: `image-${Date.now()}.${getExtension(mimetype, "jpg")}`,
+      mimetype
+    };
+  }
+
+  if (messageType === "videoMessage") {
+    const mimetype = msg.message?.videoMessage?.mimetype || "video/mp4";
+    return {
+      filename: `video-${Date.now()}.${getExtension(mimetype, "mp4")}`,
+      mimetype
+    };
+  }
+
+  if (messageType === "audioMessage") {
+    const mimetype =
+      msg.message?.audioMessage?.mimetype || "audio/ogg; codecs=opus";
+    return { filename: `audio-${Date.now()}.ogg`, mimetype };
+  }
+
+  if (messageType === "documentMessage") {
+    const docMsg = msg.message?.documentMessage;
+    const mimetype = docMsg?.mimetype || "application/octet-stream";
+    const ext = getExtension(mimetype, "bin");
+    return {
+      filename:
+        docMsg?.fileName || docMsg?.title || `document-${Date.now()}.${ext}`,
+      mimetype
+    };
+  }
+
+  if (messageType === "stickerMessage") {
+    const mimetype = msg.message?.stickerMessage?.mimetype || "image/webp";
+    return { filename: `sticker-${Date.now()}.webp`, mimetype };
+  }
+
+  return { filename: "", mimetype: "" };
+};
+
+// Streams the media straight to disk: documents can have hundreds of MB,
+// too big to hold in memory (let alone as base64).
 const convertToMediaPayload = async (
   msg: WAMessage,
   wbot: Session
 ): Promise<MediaPayload | undefined> => {
   if (!hasMedia(msg)) return undefined;
 
-  // TODO save direct to disc using stream
+  const tempPath = join(
+    uploadConfig.directory,
+    `.incoming-${msg.key.id}-${Date.now()}`
+  );
+
   try {
-    const buffer = await downloadMediaMessage(
+    const stream = (await downloadMediaMessage(
       msg,
-      "buffer",
+      "stream",
       {},
       {
         logger: whaileyLogger,
         reuploadRequest: wbot.updateMediaMessage
       }
-    );
+    )) as Transform;
 
-    const messageType = getContentType(msg.message || undefined);
-    const getExtension = (mimetype: string, fallback: string): string =>
-      mimetype.split("/")[1]?.split(";")[0] || fallback;
+    await pipelineAsync(stream, createWriteStream(tempPath));
 
-    if (messageType === "imageMessage") {
-      const mimetype = msg.message?.imageMessage?.mimetype || "image/jpeg";
-      return {
-        filename: `image-${Date.now()}.${getExtension(mimetype, "jpg")}`,
-        mimetype,
-        data: buffer.toString("base64")
-      };
-    }
-
-    if (messageType === "videoMessage") {
-      const mimetype = msg.message?.videoMessage?.mimetype || "video/mp4";
-      return {
-        filename: `video-${Date.now()}.${getExtension(mimetype, "mp4")}`,
-        mimetype,
-        data: buffer.toString("base64")
-      };
-    }
-
-    if (messageType === "audioMessage") {
-      const mimetype =
-        msg.message?.audioMessage?.mimetype || "audio/ogg; codecs=opus";
-      return {
-        filename: `audio-${Date.now()}.ogg`,
-        mimetype,
-        data: buffer.toString("base64")
-      };
-    }
-
-    if (messageType === "documentMessage") {
-      const docMsg = msg.message?.documentMessage;
-      const mimetype = docMsg?.mimetype || "application/octet-stream";
-      const ext = getExtension(mimetype, "bin");
-      return {
-        filename:
-          docMsg?.fileName || docMsg?.title || `document-${Date.now()}.${ext}`,
-        mimetype,
-        data: buffer.toString("base64")
-      };
-    }
-
-    if (messageType === "stickerMessage") {
-      const mimetype = msg.message?.stickerMessage?.mimetype || "image/webp";
-      return {
-        filename: `sticker-${Date.now()}.webp`,
-        mimetype,
-        data: buffer.toString("base64")
-      };
-    }
-
-    return {
-      filename: "",
-      mimetype: "",
-      data: buffer.toString("base64")
-    };
+    return { ...getMediaInfo(msg), path: tempPath };
   } catch (err) {
+    unlink(tempPath, () => undefined);
     logger.error({
       info: "Error downloading media",
       err,

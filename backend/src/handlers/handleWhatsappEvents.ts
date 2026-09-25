@@ -1,6 +1,6 @@
-import { join } from "path";
+import { basename, join } from "path";
 import { promisify } from "util";
-import { writeFile } from "fs";
+import { writeFile, rename } from "fs";
 import * as Sentry from "@sentry/node";
 
 import { getIO } from "../libs/socket";
@@ -24,6 +24,7 @@ import { MessageType, MessageAck } from "../providers/WhatsApp/types";
 import GetContactChatId from "../helpers/GetContactChatId";
 
 const writeFileAsync = promisify(writeFile);
+const renameAsync = promisify(rename);
 
 export interface ContactPayload {
   name: string;
@@ -52,7 +53,10 @@ export interface MessagePayload {
 export interface MediaPayload {
   filename: string;
   mimetype: string;
-  data: string;
+  // either the content as base64 or a file already downloaded to disk
+  // (inside the public folder)
+  data?: string;
+  path?: string;
 }
 
 export interface WhatsappContextPayload {
@@ -82,9 +86,16 @@ const processLocationMessage = (
   return messagePayload;
 };
 
+// The name comes from the sender: keep only a plain file name so it can't
+// point outside the public folder (e.g. "../../dist/server.js")
+const sanitizeFileName = (name: string): string =>
+  basename(name.split("\\").join("/"))
+    .replace(/[<>:"|?*\u0000-\u001f]/g, "_")
+    .replace(/^\.+/, "");
+
 const saveMediaFile = async (mediaPayload: MediaPayload): Promise<string> => {
   const randomId = makeRandomId(5);
-  const { filename: originalFilename } = mediaPayload;
+  const originalFilename = sanitizeFileName(mediaPayload.filename || "");
 
   let filename: string;
   if (!originalFilename) {
@@ -97,11 +108,12 @@ const saveMediaFile = async (mediaPayload: MediaPayload): Promise<string> => {
   }
 
   try {
-    await writeFileAsync(
-      join(__dirname, "..", "..", "public", filename),
-      mediaPayload.data,
-      "base64"
-    );
+    const destination = join(__dirname, "..", "..", "public", filename);
+    if (mediaPayload.path) {
+      await renameAsync(mediaPayload.path, destination);
+    } else {
+      await writeFileAsync(destination, mediaPayload.data || "", "base64");
+    }
   } catch (err) {
     Sentry.captureException(err);
     logger.error(err);
