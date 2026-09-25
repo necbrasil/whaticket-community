@@ -1253,11 +1253,9 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     const validMessages = messages.map(unwrapMessage).filter(msg => {
       if (!msg.message || !shouldHandleMessage(msg)) return false;
 
-      if (type === "notify") return true;
-
-      if (type === "append" && msg.key.fromMe) return true;
-
-      return false;
+      // "append" also carries messages received while the connection was
+      // offline (e.g. during a deploy); dropping them lost those messages
+      return type === "notify" || type === "append";
     });
 
     if (validMessages.length === 0) return;
