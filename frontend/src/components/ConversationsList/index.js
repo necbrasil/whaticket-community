@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useReducer, useRef } from "react";
 import { useHistory } from "react-router-dom";
-import { parseISO, format, isSameDay } from "date-fns";
 
 import { makeStyles } from "@material-ui/core/styles";
 import { green } from "@material-ui/core/colors";
@@ -31,6 +30,7 @@ import toastError from "../../errors/toastError";
 import { i18n } from "../../translate/i18n";
 import TicketsListSkeleton from "../TicketsListSkeleton";
 import NewConversationModal from "../NewConversationModal";
+import { formatListTime } from "../../helpers/dates";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -217,14 +217,6 @@ const renderAck = (ack, classes) => {
   return <DoneAll className={classes.ackReadIcon} />;
 };
 
-const formatTime = (date) => {
-  if (!date) return "";
-  const parsed = typeof date === "string" ? parseISO(date) : new Date(date);
-  return isSameDay(parsed, new Date())
-    ? format(parsed, "HH:mm")
-    : format(parsed, "dd/MM/yyyy");
-};
-
 const ConversationsList = ({ selectedContactId }) => {
   const classes = useStyles();
   const history = useHistory();
@@ -407,7 +399,7 @@ const ConversationsList = ({ selectedContactId }) => {
                           unread ? classes.unreadTime : ""
                         }`}
                       >
-                        {formatTime(conversation.updatedAt)}
+                        {formatListTime(conversation.updatedAt)}
                       </Typography>
                     </div>
                   }

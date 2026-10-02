@@ -20,6 +20,7 @@ import api from "../../services/api";
 import openSocket from "../../services/socket-io";
 import { ReplyMessageProvider } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import toastError from "../../errors/toastError";
+import { i18n } from "../../translate/i18n";
 
 const drawerWidth = 320;
 
@@ -71,7 +72,27 @@ const useStyles = makeStyles((theme) => ({
     minWidth: 0,
     cursor: "pointer",
   },
+  dropOverlay: {
+    position: "absolute",
+    inset: 8,
+    zIndex: 10,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    border: `3px dashed ${theme.palette.primary.main}`,
+    backgroundColor:
+      theme.palette.type === "dark"
+        ? "rgba(11, 20, 26, 0.85)"
+        : "rgba(255, 255, 255, 0.85)",
+    color: theme.palette.text.primary,
+    fontSize: 18,
+    pointerEvents: "none",
+  },
 }));
+
+const hasFiles = (e) =>
+  Array.from(e.dataTransfer?.types || []).includes("Files");
 
 const Conversation = ({ contactId }) => {
   const classes = useStyles();
@@ -81,6 +102,36 @@ const Conversation = ({ contactId }) => {
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const readTimeout = useRef();
+  // files dragged onto the chat go to the message input, like WhatsApp Web
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
+  const [droppedFiles, setDroppedFiles] = useState(null);
+
+  const handleDragEnter = (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragging(true);
+  };
+
+  const handleDragOver = (e) => {
+    if (hasFiles(e)) e.preventDefault();
+  };
+
+  const handleDragLeave = (e) => {
+    if (!hasFiles(e)) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length) setDroppedFiles({ files, at: Date.now() });
+  };
 
   const markAsRead = useCallback(() => {
     clearTimeout(readTimeout.current);
@@ -108,8 +159,7 @@ const Conversation = ({ contactId }) => {
       setLoading(false);
     };
     fetchContact();
-    markAsRead();
-  }, [contactId, markAsRead]);
+  }, [contactId]);
 
   useEffect(() => {
     const socket = openSocket();
@@ -141,7 +191,19 @@ const Conversation = ({ contactId }) => {
   }, [contactId]);
 
   return (
-    <div className={classes.root} id="drawer-container">
+    <div
+      className={classes.root}
+      id="drawer-container"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dragging && (
+        <div className={classes.dropOverlay}>
+          {i18n.t("conversations.dropFiles")}
+        </div>
+      )}
       <Paper
         variant="outlined"
         elevation={0}
@@ -176,11 +238,13 @@ const Conversation = ({ contactId }) => {
             contactId={contactId}
             isGroup={contact.isGroup}
             onNewMessage={handleNewMessage}
+            onInitialLoad={markAsRead}
           />
           <MessageInput
             ticketStatus="open"
             getTicketId={getTicketId}
             resetKey={contactId}
+            droppedFiles={droppedFiles}
           />
         </ReplyMessageProvider>
       </Paper>

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useContext,
+  useRef,
+  useMemo,
+} from "react";
 import "emoji-mart/css/emoji-mart.css";
 import { useParams } from "react-router-dom";
 import { Picker } from "emoji-mart";
@@ -19,6 +25,7 @@ import ClearIcon from "@material-ui/icons/Clear";
 import MicIcon from "@material-ui/icons/Mic";
 import CheckCircleOutlineIcon from "@material-ui/icons/CheckCircleOutline";
 import HighlightOffIcon from "@material-ui/icons/HighlightOff";
+import InsertDriveFileIcon from "@material-ui/icons/InsertDriveFile";
 import {
   FormControlLabel,
   Hidden,
@@ -100,6 +107,46 @@ const useStyles = makeStyles(theme => {
 
   uploadInput: {
     display: "none",
+  },
+
+  mediaPreviewStrip: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    maxHeight: 220,
+    overflowY: "auto",
+    padding: "10px 13px 0",
+    backgroundColor: barColor,
+    borderTop: "1px solid rgba(0, 0, 0, 0.12)",
+  },
+
+  mediaPreviewItem: {
+    width: 96,
+    height: 96,
+    borderRadius: 6,
+    overflow: "hidden",
+    flex: "none",
+    backgroundColor: fieldColor,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    "& img, & video": {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover",
+    },
+  },
+
+  mediaPreviewFileName: {
+    width: "100%",
+    padding: "0 6px",
+    fontSize: 11,
+    textAlign: "center",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: theme.palette.text.secondary,
   },
 
   mediaCaptionWrapper: {
@@ -242,7 +289,7 @@ const useStyles = makeStyles(theme => {
 
 // Outside a ticket route (conversations page) the caller passes getTicketId,
 // resolved on each send, and resetKey to clear the input when the chat changes.
-const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
+const MessageInput = ({ ticketStatus, getTicketId, resetKey, droppedFiles }) => {
   const classes = useStyles();
   const theme = useTheme();
   const { ticketId } = useParams();
@@ -279,6 +326,30 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
       setReplyingMessage(null);
     };
   }, [ticketId, resetKey, setReplyingMessage]);
+
+  useEffect(() => {
+    if (droppedFiles?.files?.length && ticketStatus === "open") {
+      setMedias(droppedFiles.files);
+    }
+  }, [droppedFiles, ticketStatus]);
+
+  // thumbnails of the selected files, before sending
+  const mediaPreviews = useMemo(
+    () =>
+      medias.map(file => ({
+        file,
+        url:
+          file.type?.startsWith("image/") || file.type?.startsWith("video/")
+            ? URL.createObjectURL(file)
+            : null,
+      })),
+    [medias]
+  );
+
+  useEffect(
+    () => () => mediaPreviews.forEach(p => p.url && URL.revokeObjectURL(p.url)),
+    [mediaPreviews]
+  );
 
   const handleChangeInput = e => {
     setInputMessage(e.target.value);
@@ -481,6 +552,31 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
 
   if (medias.length > 0)
     return (
+      <>
+      <div className={classes.mediaPreviewStrip}>
+        {mediaPreviews.map(({ file, url }, index) => (
+          <div
+            key={`${file.name}-${index}`}
+            className={classes.mediaPreviewItem}
+            title={file.name}
+          >
+            {url && file.type.startsWith("image/") && (
+              <img src={url} alt={file.name} />
+            )}
+            {url && file.type.startsWith("video/") && (
+              <video src={url} muted preload="metadata" />
+            )}
+            {!url && (
+              <>
+                <InsertDriveFileIcon className={classes.sendMessageIcons} />
+                <span className={classes.mediaPreviewFileName}>
+                  {file.name}
+                </span>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
       <Paper elevation={0} square className={classes.viewMediaInputWrapper}>
         <IconButton
           aria-label="cancel-upload"
@@ -525,6 +621,7 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey }) => {
           <SendIcon className={classes.sendMessageIcons} />
         </IconButton>
       </Paper>
+      </>
     );
   else {
     return (

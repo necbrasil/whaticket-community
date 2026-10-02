@@ -281,7 +281,12 @@ const messages = {
           cancel: "Cancelar",
         },
       },
+      dates: {
+        today: "Hoy",
+        yesterday: "Ayer",
+      },
       conversations: {
+        dropFiles: "Suelta los archivos aquí para enviar",
         searchPlaceholder: "Buscar conversación",
         empty: "No se encontraron conversaciones",
         selectConversation: "Seleccione una conversación para comenzar",
@@ -403,6 +408,8 @@ const messages = {
         },
       },
       messagesList: {
+        unreadSeparator: "{{count}} mensaje no leído",
+        unreadSeparator_plural: "{{count}} mensajes no leídos",
         deleted: "eliminado",
         edited: "editado",
         header: {

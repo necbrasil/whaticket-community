@@ -7,14 +7,17 @@ import React, {
 } from "react";
 
 import { isSameDay, parseISO, format } from "date-fns";
+import { formatDayLabel } from "../../helpers/dates";
 import openSocket from "../../services/socket-io";
 import clsx from "clsx";
 
 import { green } from "@material-ui/core/colors";
 import {
+  Badge,
   Button,
   CircularProgress,
   Divider,
+  Fab,
   IconButton,
   makeStyles,
 } from "@material-ui/core";
@@ -25,6 +28,7 @@ import {
   DoneAll,
   ExpandMore,
   GetApp,
+  KeyboardArrowDown,
 } from "@material-ui/icons";
 
 import MarkdownWrapper from "../MarkdownWrapper";
@@ -257,7 +261,8 @@ const useStyles = makeStyles((theme) => {
     alignItems: "center",
     textAlign: "center",
     alignSelf: "center",
-    width: "110px",
+    minWidth: "110px",
+    padding: "0 8px",
     backgroundColor: dark ? "#182229" : "#e1f3fb",
     margin: "10px",
     borderRadius: "10px",
@@ -288,6 +293,46 @@ const useStyles = makeStyles((theme) => {
     fontSize: 18,
     verticalAlign: "middle",
     marginLeft: 4,
+  },
+
+  unreadSeparator: {
+    alignSelf: "stretch",
+    textAlign: "center",
+    margin: "10px -20px",
+    padding: "6px 0",
+    fontSize: 13,
+    color: dark ? "#8696a0" : "#54656f",
+    backgroundColor: dark ? "rgba(255, 255, 255, 0.06)" : "rgba(255, 255, 255, 0.7)",
+  },
+
+  scrollToBottomButton: {
+    position: "absolute",
+    right: 20,
+    bottom: 16,
+    zIndex: 2,
+    backgroundColor: dark ? "#202c33" : "#fff",
+    color: dark ? "#8696a0" : "#54656f",
+    "&:hover": {
+      backgroundColor: dark ? "#2a3942" : "#f5f5f5",
+    },
+  },
+
+  newMessagesBadge: {
+    backgroundColor: green[500],
+    color: "#fff",
+  },
+
+  quotedClickable: {
+    cursor: "pointer",
+  },
+
+  "@keyframes highlightMessage": {
+    "0%": { boxShadow: "0 0 0 4px rgba(37, 211, 102, 0.8)" },
+    "100%": { boxShadow: "0 0 0 4px rgba(37, 211, 102, 0)" },
+  },
+
+  highlighted: {
+    animation: "$highlightMessage 1.8s ease-out",
   },
 
   downloadMedia: {
@@ -348,7 +393,13 @@ const reducer = (state, action) => {
 
 // With contactId it shows the whole conversation of the contact (every
 // ticket), otherwise only the messages of ticketId.
-const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
+const MessagesList = ({
+  ticketId,
+  contactId,
+  isGroup,
+  onNewMessage,
+  onInitialLoad,
+}) => {
   const classes = useStyles();
 
   const [messagesList, dispatch] = useReducer(reducer, []);
@@ -358,6 +409,20 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
   const [conversationTicketIds, setConversationTicketIds] = useState([]);
   const { setReplyingMessage } = useContext(ReplyMessageContext);
   const lastMessageRef = useRef();
+  const listRef = useRef();
+
+  // "N unread messages" separator, fixed when the chat is opened
+  const [firstUnreadId, setFirstUnreadId] = useState(null);
+  const [unreadOnOpen, setUnreadOnOpen] = useState(0);
+  // scroll position: new messages only follow the chat when at the bottom
+  const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true);
+  const [newWhileAway, setNewWhileAway] = useState(0);
+  // what to scroll to after the next render: "bottom", "unread" or null
+  const pendingScroll = useRef(null);
+  // jump to a quoted message, loading older pages until it shows up
+  const [jumpTarget, setJumpTarget] = useState(null);
+  const [highlightedId, setHighlightedId] = useState(null);
 
   const [selectedMessage, setSelectedMessage] = useState({});
   const [anchorEl, setAnchorEl] = useState(null);
@@ -365,12 +430,20 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
   const listKey = contactId ? `contact-${contactId}` : ticketId;
   const onNewMessageRef = useRef(onNewMessage);
   onNewMessageRef.current = onNewMessage;
+  const onInitialLoadRef = useRef(onInitialLoad);
+  onInitialLoadRef.current = onInitialLoad;
   const currentTicketId = useRef(listKey);
 
   useEffect(() => {
     dispatch({ type: "RESET" });
     setPageNumber(1);
     setConversationTicketIds([]);
+    setFirstUnreadId(null);
+    setUnreadOnOpen(0);
+    setNewWhileAway(0);
+    setJumpTarget(null);
+    setAtBottom(true);
+    atBottomRef.current = true;
 
     currentTicketId.current = listKey;
   }, [listKey]);
@@ -388,14 +461,26 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
           });
 
           if (currentTicketId.current === listKey) {
+            // set before dispatching: React 16 renders synchronously here and
+            // the next state update already flushes the effect reading it
+            let unread = [];
+            if (pageNumber === 1) {
+              unread = data.messages.filter((m) => !m.fromMe && !m.read);
+              pendingScroll.current = unread.length ? "unread" : "bottom";
+            }
+
             dispatch({ type: "LOAD_MESSAGES", payload: data.messages });
+            if (unread.length) {
+              setFirstUnreadId(unread[0].id);
+              setUnreadOnOpen(unread.length);
+            }
             setHasMore(data.hasMore);
             setLoading(false);
             if (contactId) setConversationTicketIds(data.ticketIds);
-          }
-
-          if (pageNumber === 1 && data.messages.length > 1) {
-            scrollToBottom();
+            // e.g. mark as read only after the unread separator was computed
+            if (pageNumber === 1 && onInitialLoadRef.current) {
+              onInitialLoadRef.current();
+            }
           }
         } catch (err) {
           setLoading(false);
@@ -418,8 +503,8 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
 
     socket.on("appMessage", (data) => {
       if (data.action === "create") {
+        followNewMessage(data.message);
         dispatch({ type: "ADD_MESSAGE", payload: data.message });
-        scrollToBottom();
       }
 
       if (data.action === "update") {
@@ -459,8 +544,8 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
           socket.emit("joinChatBox", newTicketId);
         }
 
+        followNewMessage(data.message);
         dispatch({ type: "ADD_MESSAGE", payload: data.message });
-        scrollToBottom();
         if (onNewMessageRef.current) onNewMessageRef.current(data.message);
       }
 
@@ -479,14 +564,76 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
   };
 
   const scrollToBottom = () => {
-    if (lastMessageRef.current) {
-      lastMessageRef.current.scrollIntoView({});
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
     }
+    setNewWhileAway(0);
   };
 
+  // called from the socket handlers: uses refs/setters only
+  function followNewMessage(message) {
+    if (message.fromMe || atBottomRef.current) {
+      pendingScroll.current = "bottom";
+    } else {
+      setNewWhileAway((count) => count + 1);
+    }
+  }
+
+  useEffect(() => {
+    const pending = pendingScroll.current;
+    if (!pending) return;
+    pendingScroll.current = null;
+
+    const separator = document.getElementById("unread-separator");
+    if (pending === "unread" && separator) {
+      separator.scrollIntoView({ block: "start" });
+    } else {
+      scrollToBottom();
+    }
+  }, [messagesList]);
+
+  const jumpToMessage = (messageId) => {
+    if (!messageId) return;
+    setJumpTarget({ id: messageId, attempts: 0 });
+  };
+
+  useEffect(() => {
+    if (!jumpTarget || loading) return;
+
+    const element = document.getElementById(`message-${jumpTarget.id}`);
+    if (element) {
+      element.scrollIntoView({ block: "center", behavior: "smooth" });
+      setHighlightedId(jumpTarget.id);
+      setJumpTarget(null);
+      return;
+    }
+
+    // not loaded yet: fetch older pages (bounded)
+    if (hasMore && jumpTarget.attempts < 15) {
+      setJumpTarget({ ...jumpTarget, attempts: jumpTarget.attempts + 1 });
+      setPageNumber((page) => page + 1);
+    } else {
+      setJumpTarget(null);
+    }
+  }, [jumpTarget, loading, hasMore, messagesList]);
+
+  useEffect(() => {
+    if (!highlightedId) return undefined;
+    const timeout = setTimeout(() => setHighlightedId(null), 1800);
+    return () => clearTimeout(timeout);
+  }, [highlightedId]);
+
   const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 80;
+    if (isAtBottom !== atBottomRef.current) {
+      atBottomRef.current = isAtBottom;
+      setAtBottom(isAtBottom);
+    }
+    if (isAtBottom && newWhileAway) setNewWhileAway(0);
+
     if (!hasMore) return;
-    const { scrollTop } = e.currentTarget;
 
     if (scrollTop === 0) {
       document.getElementById("messagesList").scrollTop = 1;
@@ -608,45 +755,42 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
   };
 
   const renderDailyTimestamps = (message, index) => {
-    if (index === 0) {
-      return (
-        <span
-          className={classes.dailyTimestamp}
-          key={`timestamp-${message.id}`}
-        >
-          <div className={classes.dailyTimestampText}>
-            {format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
-          </div>
-        </span>
+    const isNewDay =
+      index === 0 ||
+      !isSameDay(
+        parseISO(message.createdAt),
+        parseISO(messagesList[index - 1].createdAt)
       );
-    }
-    if (index < messagesList.length - 1) {
-      let messageDay = parseISO(messagesList[index].createdAt);
-      let previousMessageDay = parseISO(messagesList[index - 1].createdAt);
 
-      if (!isSameDay(messageDay, previousMessageDay)) {
-        return (
+    return (
+      <>
+        {isNewDay && (
           <span
             className={classes.dailyTimestamp}
             key={`timestamp-${message.id}`}
           >
             <div className={classes.dailyTimestampText}>
-              {format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
+              {formatDayLabel(message.createdAt)}
             </div>
           </span>
-        );
-      }
-    }
-    if (index === messagesList.length - 1) {
-      return (
-        <div
-          key={`ref-${message.createdAt}`}
-          ref={lastMessageRef}
-          style={{ float: "left", clear: "both" }}
-        />
-      );
-    }
+        )}
+        {index === messagesList.length - 1 && (
+          <div
+            key={`ref-${message.createdAt}`}
+            ref={lastMessageRef}
+            style={{ float: "left", clear: "both" }}
+          />
+        )}
+      </>
+    );
   };
+
+  const renderUnreadSeparator = (message) =>
+    message.id === firstUnreadId ? (
+      <span id="unread-separator" className={classes.unreadSeparator}>
+        {i18n.t("messagesList.unreadSeparator", { count: unreadOnOpen })}
+      </span>
+    ) : null;
 
   const renderMessageDivider = (message, index) => {
     if (index < messagesList.length && index > 0) {
@@ -664,9 +808,10 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
   const renderQuotedMessage = (message) => {
     return (
       <div
-        className={clsx(classes.quotedContainerLeft, {
+        className={clsx(classes.quotedContainerLeft, classes.quotedClickable, {
           [classes.quotedContainerRight]: message.fromMe,
         })}
+        onClick={() => jumpToMessage(message.quotedMsg?.id)}
       >
         <span
           className={clsx(classes.quotedSideColorLeft, {
@@ -739,8 +884,12 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
             <React.Fragment key={message.id}>
               {renderDailyTimestamps(message, index)}
               {renderMessageDivider(message, index)}
+              {renderUnreadSeparator(message)}
               <div
-                className={classes.messageLeft}
+                id={`message-${message.id}`}
+                className={clsx(classes.messageLeft, {
+                  [classes.highlighted]: highlightedId === message.id,
+                })}
                 onDoubleClick={() => handleReplyOnDoubleClick(message)}
               >
                 <IconButton
@@ -792,7 +941,10 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
               {renderDailyTimestamps(message, index)}
               {renderMessageDivider(message, index)}
               <div
-                className={classes.messageRight}
+                id={`message-${message.id}`}
+                className={clsx(classes.messageRight, {
+                  [classes.highlighted]: highlightedId === message.id,
+                })}
                 onDoubleClick={() => handleReplyOnDoubleClick(message)}
               >
                 <IconButton
@@ -852,11 +1004,26 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
       />
       <div
         id="messagesList"
+        ref={listRef}
         className={classes.messagesList}
         onScroll={handleScroll}
       >
         {messagesList.length > 0 ? renderMessages() : []}
       </div>
+      {!atBottom && (
+        <Fab
+          size="small"
+          className={classes.scrollToBottomButton}
+          onClick={scrollToBottom}
+        >
+          <Badge
+            badgeContent={newWhileAway}
+            classes={{ badge: classes.newMessagesBadge }}
+          >
+            <KeyboardArrowDown />
+          </Badge>
+        </Fab>
+      )}
       {loading && (
         <div>
           <CircularProgress className={classes.circleLoading} />
