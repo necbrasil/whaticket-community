@@ -25,7 +25,6 @@ import makeWASocket, {
   jidDecode,
   makeInMemoryStore,
   SignalDataSet,
-  AnyMessageContent,
   proto,
   Browsers,
   fetchLatestWaWebVersion,
@@ -1570,6 +1569,42 @@ const logout = async (sessionId: number): Promise<void> => {
   await clearSessionKeys(sessionId);
 };
 
+// WhatsApp only draws the quote when the reply carries the quoted message's
+// content (not just its id) and, in groups, who wrote it. Taken from the
+// session store when available, else rebuilt from the database as text.
+const buildQuotedMessage = async (
+  wbot: Session,
+  toJid: string,
+  quotedId?: string,
+  quotedFromMe?: boolean
+): Promise<WAMessage | undefined> => {
+  if (!quotedId) return undefined;
+
+  const stored = wbot.store?.messages?.[toJid]?.get(quotedId);
+  if (stored?.message) return stored;
+
+  const original = await Message.findByPk(quotedId, { include: ["contact"] });
+  const fromMe = original ? original.fromMe : Boolean(quotedFromMe);
+
+  let participant: string | undefined;
+  if (isJidGroup(toJid)) {
+    if (fromMe) {
+      participant = wbot.user?.id ? jidNormalizedUser(wbot.user.id) : undefined;
+    } else if (original?.contact) {
+      const { number, lid } = original.contact;
+      participant =
+        lid && (!number || lid.split("@")[0] === number)
+          ? lid
+          : `${number}@s.whatsapp.net`;
+    }
+  }
+
+  return {
+    key: { remoteJid: toJid, id: quotedId, fromMe, participant },
+    message: { conversation: original?.body || "" }
+  } as WAMessage;
+};
+
 const sendMessage = async (
   sessionId: number,
   to: string,
@@ -1579,17 +1614,18 @@ const sendMessage = async (
   const wbot = getWbot(sessionId);
   const toJid = normalizeJid(to);
 
-  const messageContent: AnyMessageContent = options?.quotedMessageId
-    ? {
-        text: body,
-        contextInfo: {
-          stanzaId: options.quotedMessageId,
-          participant: options.quotedMessageFromMe ? wbot.user?.id : toJid
-        }
-      }
-    : { text: body };
+  const quoted = await buildQuotedMessage(
+    wbot,
+    toJid,
+    options?.quotedMessageId,
+    options?.quotedMessageFromMe
+  );
 
-  const sentMsg = await wbot.sendMessage(toJid, messageContent);
+  const sentMsg = await wbot.sendMessage(
+    toJid,
+    { text: body },
+    quoted ? { quoted } : undefined
+  );
 
   if (!sentMsg?.key.id) {
     throw new AppError("ERR_SENDING_WAPP_MSG");
@@ -1634,9 +1670,11 @@ const sendMedia = async (
   const mediaBuffer = media.path ? readFileSync(media.path) : media.data;
   if (!mediaBuffer) throw new AppError("ERR_NO_MEDIA_DATA");
 
-  const contextInfo = options?.quotedMessageId
-    ? { stanzaId: options.quotedMessageId, participant: toJid }
-    : undefined;
+  const quoted = await buildQuotedMessage(
+    wbot,
+    toJid,
+    options?.quotedMessageId
+  );
 
   let audioBuffer = mediaBuffer;
   let audioMimetype = media.mimetype;
@@ -1659,8 +1697,7 @@ const sendMedia = async (
   const buildPayload = () => {
     const base = {
       caption: options?.caption,
-      mimetype: media.mimetype,
-      contextInfo
+      mimetype: media.mimetype
     };
 
     if (media.mimetype.startsWith("image/")) {
@@ -1682,8 +1719,7 @@ const sendMedia = async (
         message: {
           audio: audioBuffer,
           mimetype: audioMimetype,
-          ptt,
-          contextInfo
+          ptt
         },
         type: ptt ? "ptt" : ("audio" as MessageType)
       };
@@ -1694,8 +1730,7 @@ const sendMedia = async (
         document: mediaBuffer,
         caption: options?.caption,
         mimetype: media.mimetype,
-        fileName: media.filename,
-        contextInfo
+        fileName: media.filename
       },
       type: "document" as MessageType
     };
@@ -1703,7 +1738,11 @@ const sendMedia = async (
 
   const { message, type } = buildPayload();
 
-  const sent = await wbot.sendMessage(toJid, message);
+  const sent = await wbot.sendMessage(
+    toJid,
+    message,
+    quoted ? { quoted } : undefined
+  );
   if (!sent?.key?.id) throw new AppError("ERR_SENDING_WAPP_MEDIA_MSG");
 
   logger.debug({

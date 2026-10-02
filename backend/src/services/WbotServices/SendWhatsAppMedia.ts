@@ -10,12 +10,14 @@ interface Request {
   media: Express.Multer.File;
   ticket: Ticket;
   body?: string;
+  quotedMsgId?: string;
 }
 
 const SendWhatsAppMedia = async ({
   media,
   ticket,
-  body
+  body,
+  quotedMsgId
 }: Request): Promise<ProviderMessage> => {
   try {
     if (!ticket.whatsappId) {
@@ -35,6 +37,7 @@ const SendWhatsAppMedia = async ({
     };
 
     const mediaOptions = {
+      quotedMessageId: quotedMsgId,
       caption: hasBody,
       sendAudioAsVoice: true,
       sendMediaAsDocument:

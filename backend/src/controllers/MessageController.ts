@@ -22,6 +22,8 @@ type MessageData = {
   quotedMsg?: Message;
   // attachments only: sent as the first file's caption
   caption?: string;
+  // attachments only: the message being replied to
+  quotedMsgId?: string;
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
@@ -40,7 +42,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
-  const { body, quotedMsg, caption }: MessageData = req.body;
+  const { body, quotedMsg, caption, quotedMsgId }: MessageData = req.body;
   const medias = req.files as Express.Multer.File[];
 
   const ticket = await ShowTicketService(ticketId);
@@ -53,7 +55,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
         await SendWhatsAppMedia({
           media,
           ticket,
-          body: index === 0 ? caption : undefined
+          body: index === 0 ? caption : undefined,
+          quotedMsgId: index === 0 ? quotedMsgId : undefined
         });
       })
     );

@@ -397,6 +397,9 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey, droppedFiles }) => 
         signMessage ? `*${user?.name}:* ${caption.trim()}` : caption.trim()
       );
     }
+    if (replyingMessage?.id) {
+      formData.append("quotedMsgId", replyingMessage.id);
+    }
 
     try {
       await api.post(`/messages/${await resolveTicketId()}`, formData);
@@ -407,6 +410,7 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey, droppedFiles }) => 
     setLoading(false);
     setMedias([]);
     setCaption("");
+    setReplyingMessage(null);
   };
 
   const handleSendMessage = async () => {
