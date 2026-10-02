@@ -42,10 +42,13 @@ const useStyles = makeStyles(theme => ({
 	},
 }));
 
-// Whether the message's chat is the one open on a visible tab. Read at event
-// time: this component doesn't re-render on route changes.
+// Whether the message's chat is open and the agent is looking at it. Read at
+// event time: this component doesn't re-render on route changes. A visible tab
+// isn't enough: the browser may be behind another window (hasFocus is false).
 const isOnScreen = ({ message, ticket }) => {
-	if (document.visibilityState !== "visible") return false;
+	if (document.visibilityState !== "visible" || !document.hasFocus()) {
+		return false;
+	}
 
 	const [, page, id] = window.location.pathname.split("/");
 	if (page === "conversations") return +id === ticket.contactId;

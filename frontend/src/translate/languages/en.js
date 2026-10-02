@@ -398,6 +398,7 @@ const messages = {
         },
       },
       messagesList: {
+        deleted: "deleted",
         edited: "edited",
         header: {
           assignedTo: "Assigned to:",

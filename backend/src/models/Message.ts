@@ -62,6 +62,17 @@ class Message extends Model<Message> {
   @Column
   isEdited: boolean;
 
+  // WhatsApp's messageSecret (base64), needed to decrypt later edits; kept
+  // out of API responses (see toJSON)
+  @Column
+  messageSecret: string;
+
+  toJSON(): object {
+    const values = super.toJSON() as Record<string, unknown>;
+    delete values.messageSecret;
+    return values;
+  }
+
   @Column(DataType.TEXT)
   get reactions(): MessageReaction[] {
     const value = this.getDataValue("reactions") as unknown as string | null;

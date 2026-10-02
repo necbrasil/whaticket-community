@@ -692,12 +692,21 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
     setReplyingMessage(message);
   };
 
-  const renderEditedLabel = (message) =>
-    message.isEdited ? (
+  // deleted messages stay in the chat (text kept), just flagged
+  const renderEditedLabel = (message) => {
+    if (message.isDeleted) {
+      return (
+        <span className={classes.editedLabel}>
+          {i18n.t("messagesList.deleted")}
+        </span>
+      );
+    }
+    return message.isEdited ? (
       <span className={classes.editedLabel}>
         {i18n.t("messagesList.edited")}
       </span>
     ) : null;
+  };
 
   // same emoji from several people shows once, with the count
   const renderReactions = (message) => {
@@ -755,7 +764,8 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
                 <div
                   className={clsx(classes.textContentItem, {
                     [classes.textContentItemDeleted]: message.isDeleted,
-                    [classes.textContentItemEdited]: message.isEdited,
+                    [classes.textContentItemEdited]:
+                      message.isEdited || message.isDeleted,
                   })}
                 >
                   {message.isDeleted && (
@@ -801,7 +811,8 @@ const MessagesList = ({ ticketId, contactId, isGroup, onNewMessage }) => {
                 <div
                   className={clsx(classes.textContentItem, {
                     [classes.textContentItemDeleted]: message.isDeleted,
-                    [classes.textContentItemEdited]: message.isEdited,
+                    [classes.textContentItemEdited]:
+                      message.isEdited || message.isDeleted,
                   })}
                 >
                   {message.isDeleted && (

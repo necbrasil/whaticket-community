@@ -39,6 +39,7 @@ import NodeCache from "node-cache";
 
 import Whatsapp from "../../../models/Whatsapp";
 import Contact from "../../../models/Contact";
+import Message from "../../../models/Message";
 import { getIO } from "../../../libs/socket";
 import { logger } from "../../../utils/logger";
 import AppError from "../../../errors/AppError";
@@ -486,7 +487,15 @@ const unwrapMessage = (msg: WAMessage): WAMessage => {
     if (!inner || inner === content) break;
     content = inner;
   }
-  return content === msg.message ? msg : { ...msg, message: content };
+  if (content === msg.message || !content) return msg;
+  return {
+    ...msg,
+    message: {
+      ...content,
+      messageContextInfo:
+        content.messageContextInfo || msg.message?.messageContextInfo
+    }
+  };
 };
 
 // An edit arrives as a new message pointing to the original one
@@ -544,6 +553,11 @@ const shouldHandleMessage = (msg: WAMessage): boolean => {
   return hasMedia(msg) || allowedFromMeTypes.includes(messageType || "");
 };
 
+const getMessageSecret = (msg: WAMessage): string | undefined => {
+  const secret = msg.message?.messageContextInfo?.messageSecret;
+  return secret?.length ? Buffer.from(secret).toString("base64") : undefined;
+};
+
 const convertToMessagePayload = (msg: WAMessage): MessagePayload => {
   const fromJid = msg.key.remoteJid || "";
   const toJid = msg.key.fromMe ? fromJid : msg.key.participant || fromJid;
@@ -560,7 +574,8 @@ const convertToMessagePayload = (msg: WAMessage): MessagePayload => {
     to: toJid,
     hasQuotedMsg: Boolean(getQuotedMessageId(msg)),
     quotedMsgId: getQuotedMessageId(msg),
-    ack: fromMe ? 1 : 0
+    ack: fromMe ? 1 : 0,
+    messageSecret: getMessageSecret(msg)
   };
 };
 
@@ -1185,7 +1200,22 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     retryRequestDelayMs: 500,
     transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
     sentMessagesCache,
-    getMessage: async (key: WAMessageKey) => {
+    getMessage: async (key: WAMessageKey, reason?: string) => {
+      // decrypting an edit needs the original message's secret, which the
+      // in-memory caches lose (TTL, restarts, JSON serialization)
+      if (reason === "secret" && key.id) {
+        const original = await Message.findByPk(key.id, {
+          attributes: ["messageSecret"]
+        });
+        if (original?.messageSecret) {
+          return {
+            messageContextInfo: {
+              messageSecret: Buffer.from(original.messageSecret, "base64")
+            }
+          };
+        }
+      }
+
       const cached = msgCache.get(key);
       if (cached) return cached;
 

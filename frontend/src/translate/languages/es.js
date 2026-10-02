@@ -403,6 +403,7 @@ const messages = {
         },
       },
       messagesList: {
+        deleted: "eliminado",
         edited: "editado",
         header: {
           assignedTo: "Asignado a:",
