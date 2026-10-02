@@ -449,7 +449,13 @@ const messages = {
           cancel: "Cancelar",
         },
       },
+      editMessageModal: {
+        title: "Editar mensaje",
+        save: "Guardar",
+        cancel: "Cancelar",
+      },
       messageOptionsMenu: {
+        edit: "Editar",
         delete: "Borrar",
         reply: "Responder",
         confirmationModal: {
@@ -458,6 +464,10 @@ const messages = {
         },
       },
       backendErrors: {
+        ERR_EDIT_EMPTY_MESSAGE: "El mensaje no puede estar vacío.",
+        ERR_EDIT_NOT_ALLOWED: "Solo se pueden editar mensajes de texto enviados por nosotros.",
+        ERR_EDIT_WINDOW_EXPIRED: "WhatsApp solo permite editar mensajes enviados hace menos de 15 minutos.",
+        ERR_EDITING_WAPP_MSG: "No se pudo editar el mensaje en WhatsApp.",
         ERR_NO_OTHER_WHATSAPP:
           "Debe haber al menos una conexión de WhatsApp predeterminada.",
         ERR_NO_DEF_WAPP_FOUND:

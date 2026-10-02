@@ -5,13 +5,29 @@ import MenuItem from "@material-ui/core/MenuItem";
 import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import ConfirmationModal from "../ConfirmationModal";
+import EditMessageModal from "../EditMessageModal";
 import { Menu } from "@material-ui/core";
 import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import toastError from "../../errors/toastError";
 
+// WhatsApp only accepts edits of our own text messages up to 15 minutes old
+const EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+const canEdit = (message) =>
+  message.fromMe &&
+  !message.isDeleted &&
+  message.mediaType === "chat" &&
+  Date.now() - new Date(message.createdAt).getTime() < EDIT_WINDOW_MS;
+
 const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
   const { setReplyingMessage } = useContext(ReplyMessageContext);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
+  const handleOpenEdit = () => {
+    setEditOpen(true);
+    handleClose();
+  };
 
   const handleDeleteMessage = async () => {
     try {
@@ -41,6 +57,11 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
       >
         {i18n.t("messageOptionsMenu.confirmationModal.message")}
       </ConfirmationModal>
+      <EditMessageModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        message={message}
+      />
       <Menu
         anchorEl={anchorEl}
         getContentAnchorEl={null}
@@ -55,6 +76,11 @@ const MessageOptionsMenu = ({ message, menuOpen, handleClose, anchorEl }) => {
         open={menuOpen}
         onClose={handleClose}
       >
+        {canEdit(message) && (
+          <MenuItem onClick={handleOpenEdit}>
+            {i18n.t("messageOptionsMenu.edit")}
+          </MenuItem>
+        )}
         {message.fromMe && (
           <MenuItem onClick={handleOpenConfirmationModal}>
             {i18n.t("messageOptionsMenu.delete")}

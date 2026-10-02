@@ -447,7 +447,13 @@ const messages = {
           cancel: "Cancelar",
         },
       },
+      editMessageModal: {
+        title: "Editar mensagem",
+        save: "Salvar",
+        cancel: "Cancelar",
+      },
       messageOptionsMenu: {
+        edit: "Editar",
         delete: "Deletar",
         reply: "Responder",
         confirmationModal: {
@@ -456,6 +462,10 @@ const messages = {
         },
       },
       backendErrors: {
+        ERR_EDIT_EMPTY_MESSAGE: "A mensagem não pode ficar vazia.",
+        ERR_EDIT_NOT_ALLOWED: "Só é possível editar mensagens de texto enviadas por nós.",
+        ERR_EDIT_WINDOW_EXPIRED: "O WhatsApp só permite editar mensagens enviadas há menos de 15 minutos.",
+        ERR_EDITING_WAPP_MSG: "Não foi possível editar a mensagem no WhatsApp.",
         ERR_NO_OTHER_WHATSAPP: "Deve haver pelo menos um WhatsApp padrão.",
         ERR_NO_DEF_WAPP_FOUND:
           "Nenhum WhatsApp padrão encontrado. Verifique a página de conexões.",
