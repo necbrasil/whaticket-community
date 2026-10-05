@@ -36,7 +36,7 @@ import VcardPreview from "../VcardPreview";
 import LocationPreview from "../LocationPreview";
 import ModalImageCors from "../ModalImageCors";
 import MessageOptionsMenu from "../MessageOptionsMenu";
-import whatsBackground from "../../assets/wa-background.png";
+import whatsBackground from "../../assets/wa-background.svg";
 
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
@@ -54,11 +54,23 @@ const useStyles = makeStyles((theme) => {
     display: "flex",
     flexDirection: "column",
     flexGrow: 1,
+    backgroundColor: dark ? "#0b141a" : "#efeae2",
+    // the doodles sit behind the scrolling list, like WhatsApp Web
+    "&::before": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      pointerEvents: "none",
+      backgroundImage: `url(${whatsBackground})`,
+      backgroundSize: "412.5px 749.25px",
+      backgroundRepeat: "repeat",
+      opacity: dark ? 0.05 : 0.06,
+      filter: dark ? "invert(1)" : "none",
+    },
   },
 
   messagesList: {
-    backgroundImage: dark ? "none" : `url(${whatsBackground})`,
-    backgroundColor: dark ? "#0b141a" : "#efeae2",
+    position: "relative",
     display: "flex",
     flexDirection: "column",
     flexGrow: 1,
