@@ -58,11 +58,11 @@ const useStyles = makeStyles((theme) => {
 
   messagesList: {
     backgroundImage: dark ? "none" : `url(${whatsBackground})`,
-    backgroundColor: dark ? "#0b141a" : undefined,
+    backgroundColor: dark ? "#0b141a" : "#efeae2",
     display: "flex",
     flexDirection: "column",
     flexGrow: 1,
-    padding: "20px 20px 20px 20px",
+    padding: "20px 6% 12px",
     overflowY: "scroll",
     [theme.breakpoints.down("sm")]: {
       paddingBottom: "90px",
@@ -83,7 +83,9 @@ const useStyles = makeStyles((theme) => {
     marginRight: 20,
     marginTop: 2,
     minWidth: 100,
-    maxWidth: 600,
+    maxWidth: "65%",
+    fontSize: 14.2,
+    lineHeight: "19px",
     height: "auto",
     display: "block",
     position: "relative",
@@ -96,23 +98,47 @@ const useStyles = makeStyles((theme) => {
 
     whiteSpace: "pre-wrap",
     backgroundColor: dark ? "#202c33" : "#ffffff",
-    color: dark ? "#e9edef" : "#303030",
+    color: dark ? "#e9edef" : "#111b21",
     alignSelf: "flex-start",
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 8,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
+    borderRadius: 7.5,
     paddingLeft: 5,
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: dark ? "none" : "0 1px 1px #b3b3b3",
+    boxShadow: "0 1px 0.5px rgba(11, 20, 26, 0.13)",
+  },
+
+  // the little tail on the first bubble of a sequence
+  tailLeft: {
+    borderTopLeftRadius: 0,
+    "&::before": {
+      content: '""',
+      position: "absolute",
+      top: 0,
+      left: -8,
+      borderStyle: "solid",
+      borderWidth: "0 8px 8px 0",
+      borderColor: `transparent ${dark ? "#202c33" : "#ffffff"} transparent transparent`,
+    },
+  },
+
+  tailRight: {
+    borderTopRightRadius: 0,
+    "&::before": {
+      content: '""',
+      position: "absolute",
+      top: 0,
+      right: -8,
+      borderStyle: "solid",
+      borderWidth: "0 0 8px 8px",
+      borderColor: `transparent transparent transparent ${dark ? "#005c4b" : "#d9fdd3"}`,
+    },
   },
 
   quotedContainerLeft: {
-    margin: "-3px -80px 6px -6px",
+    margin: "-3px -70px 6px -6px",
     overflow: "hidden",
-    backgroundColor: dark ? "#1d282f" : "#f0f0f0",
+    backgroundColor: dark ? "#1d282f" : "#f5f6f6",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -130,14 +156,16 @@ const useStyles = makeStyles((theme) => {
   quotedSideColorLeft: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#6bcbef",
+    backgroundColor: "#53bdeb",
   },
 
   messageRight: {
     marginLeft: 20,
     marginTop: 2,
     minWidth: 100,
-    maxWidth: 600,
+    maxWidth: "65%",
+    fontSize: 14.2,
+    lineHeight: "19px",
     height: "auto",
     display: "block",
     position: "relative",
@@ -149,24 +177,21 @@ const useStyles = makeStyles((theme) => {
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: dark ? "#005c4b" : "#dcf8c6",
-    color: dark ? "#e9edef" : "#303030",
+    backgroundColor: dark ? "#005c4b" : "#d9fdd3",
+    color: dark ? "#e9edef" : "#111b21",
     alignSelf: "flex-end",
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 0,
+    borderRadius: 7.5,
     paddingLeft: 5,
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: dark ? "none" : "0 1px 1px #b3b3b3",
+    boxShadow: "0 1px 0.5px rgba(11, 20, 26, 0.13)",
   },
 
   quotedContainerRight: {
-    margin: "-3px -80px 6px -6px",
+    margin: "-3px -70px 6px -6px",
     overflowY: "hidden",
-    backgroundColor: dark ? "#025144" : "#cfe9ba",
+    backgroundColor: dark ? "#025144" : "#d1f4cc",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -182,7 +207,7 @@ const useStyles = makeStyles((theme) => {
   quotedSideColorRight: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#35cd96",
+    backgroundColor: "#06cf9c",
   },
 
   messageActionsButton: {
@@ -197,13 +222,13 @@ const useStyles = makeStyles((theme) => {
 
   messageContactName: {
     display: "flex",
-    color: "#6bcbef",
+    color: "#53bdeb",
     fontWeight: 500,
   },
 
   textContentItem: {
     overflowWrap: "break-word",
-    padding: "3px 80px 6px 6px",
+    padding: "3px 70px 6px 6px",
   },
 
   textContentItemEdited: {
@@ -236,7 +261,7 @@ const useStyles = makeStyles((theme) => {
     fontStyle: "italic",
     color: dark ? "rgba(233, 237, 239, 0.45)" : "rgba(0, 0, 0, 0.36)",
     overflowWrap: "break-word",
-    padding: "3px 80px 6px 6px",
+    padding: "3px 70px 6px 6px",
   },
 
   messageMedia: {
@@ -251,35 +276,35 @@ const useStyles = makeStyles((theme) => {
 
   timestamp: {
     fontSize: 11,
+    lineHeight: "15px",
     position: "absolute",
-    bottom: 0,
-    right: 5,
-    color: dark ? "#8696a0" : "#999",
+    bottom: 3,
+    right: 7,
+    whiteSpace: "nowrap",
+    color: dark ? "rgba(233, 237, 239, 0.6)" : "#667781",
   },
 
   dailyTimestamp: {
     alignItems: "center",
     textAlign: "center",
     alignSelf: "center",
-    minWidth: "110px",
-    padding: "0 8px",
-    backgroundColor: dark ? "#182229" : "#e1f3fb",
-    margin: "10px",
-    borderRadius: "10px",
-    boxShadow: "0 1px 1px #b3b3b3",
+    padding: "5px 12px 6px",
+    backgroundColor: dark ? "#182229" : "#ffffff",
+    margin: "10px 0 12px",
+    borderRadius: 7.5,
+    boxShadow: "0 1px 0.5px rgba(11, 20, 26, 0.13)",
   },
 
   dailyTimestampText: {
-    color: dark ? "#8696a0" : "#808888",
-    padding: 8,
-    alignSelf: "center",
-    marginLeft: "0px",
+    fontSize: 12.5,
+    lineHeight: "21px",
+    color: dark ? "#8696a0" : "#54656f",
   },
 
   ackIcons: {
-    fontSize: 18,
+    fontSize: 16,
     verticalAlign: "middle",
-    marginLeft: 4,
+    marginLeft: 3,
   },
 
   deletedIcon: {
@@ -289,10 +314,10 @@ const useStyles = makeStyles((theme) => {
   },
 
   ackDoneAllIcon: {
-    color: "#34B7F1",
-    fontSize: 18,
+    color: "#53bdeb",
+    fontSize: 16,
     verticalAlign: "middle",
-    marginLeft: 4,
+    marginLeft: 3,
   },
 
   unreadSeparator: {
@@ -792,6 +817,14 @@ const MessagesList = ({
       </span>
     ) : null;
 
+  const startsSequence = (index) =>
+    index === 0 ||
+    messagesList[index - 1].fromMe !== messagesList[index].fromMe ||
+    !isSameDay(
+      parseISO(messagesList[index].createdAt),
+      parseISO(messagesList[index - 1].createdAt)
+    );
+
   const renderMessageDivider = (message, index) => {
     if (index < messagesList.length && index > 0) {
       let messageUser = messagesList[index].fromMe;
@@ -888,6 +921,7 @@ const MessagesList = ({
               <div
                 id={`message-${message.id}`}
                 className={clsx(classes.messageLeft, {
+                  [classes.tailLeft]: startsSequence(index),
                   [classes.highlighted]: highlightedId === message.id,
                 })}
                 onDoubleClick={() => handleReplyOnDoubleClick(message)}
@@ -943,6 +977,7 @@ const MessagesList = ({
               <div
                 id={`message-${message.id}`}
                 className={clsx(classes.messageRight, {
+                  [classes.tailRight]: startsSequence(index),
                   [classes.highlighted]: highlightedId === message.id,
                 })}
                 onDoubleClick={() => handleReplyOnDoubleClick(message)}

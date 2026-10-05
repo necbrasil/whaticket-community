@@ -61,7 +61,8 @@ const initRecorder = async () => {
 // dark colors follow WhatsApp Web's dark theme
 const useStyles = makeStyles(theme => {
   const dark = theme.palette.type === "dark";
-  const barColor = dark ? "#202c33" : "#eee";
+  const barColor = dark ? "#202c33" : "#f0f2f5";
+  const iconColor = dark ? "#aebac1" : "#54656f";
   const fieldColor = dark ? "#2a3942" : "#fff";
   return {
   mainWrapper: {
@@ -69,7 +70,6 @@ const useStyles = makeStyles(theme => {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    borderTop: "1px solid rgba(0, 0, 0, 0.12)",
     [theme.breakpoints.down("sm")]: {
       position: "fixed",
       bottom: 0,
@@ -81,28 +81,32 @@ const useStyles = makeStyles(theme => {
     background: barColor,
     width: "100%",
     display: "flex",
-    padding: "7px",
+    padding: "5px 10px",
+    minHeight: 62,
+    boxSizing: "border-box",
     alignItems: "center",
   },
 
   messageInputWrapper: {
-    padding: 6,
-    marginRight: 7,
+    padding: "9px 12px",
+    margin: "0 10px",
     background: fieldColor,
     display: "flex",
-    borderRadius: 20,
+    borderRadius: 8,
     flex: 1,
     position: "relative",
   },
 
   messageInput: {
-    paddingLeft: 10,
     flex: 1,
     border: "none",
+    fontSize: 15,
+    lineHeight: "20px",
+    color: dark ? "#d1d7db" : "#111b21",
   },
 
   sendMessageIcons: {
-    color: "grey",
+    color: iconColor,
   },
 
   uploadInput: {

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useHistory, useParams } from "react-router-dom";
 import clsx from "clsx";
 
-import Paper from "@material-ui/core/Paper";
+import WhatsAppIcon from "@material-ui/icons/WhatsApp";
 import useMediaQuery from "@material-ui/core/useMediaQuery";
 import { makeStyles, useTheme } from "@material-ui/core/styles";
 
@@ -14,7 +14,10 @@ const MIN_LIST_WIDTH = 260;
 const DEFAULT_LIST_WIDTH = 380;
 const LIST_WIDTH_KEY = "conversationsListWidth";
 
-const useStyles = makeStyles((theme) => ({
+// colors follow WhatsApp Web
+const useStyles = makeStyles((theme) => {
+  const dark = theme.palette.type === "dark";
+  return {
   container: {
     flex: 1,
     height: `calc(100% - 48px)`,
@@ -24,7 +27,7 @@ const useStyles = makeStyles((theme) => ({
   paper: {
     display: "flex",
     height: "100%",
-    backgroundColor: theme.palette.background.paper,
+    backgroundColor: dark ? "#111b21" : "#fff",
   },
   listWrapper: {
     display: "flex",
@@ -44,12 +47,12 @@ const useStyles = makeStyles((theme) => ({
   },
   resizer: {
     flex: "none",
-    width: 5,
+    width: 3,
     cursor: "col-resize",
-    backgroundColor: theme.palette.divider,
+    backgroundColor: dark ? "#222d34" : "#e9edef",
     transition: "background-color 0.15s",
     "&:hover, &$resizing": {
-      backgroundColor: theme.palette.primary.main,
+      backgroundColor: "#00a884",
     },
   },
   resizing: {},
@@ -66,15 +69,32 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   welcomeMsg: {
-    backgroundColor: theme.palette.background.paper,
+    backgroundColor: dark ? "#222e35" : "#f0f2f5",
+    borderBottom: `6px solid ${dark ? "#00a884" : "#25d366"}`,
     display: "flex",
-    justifyContent: "space-evenly",
+    flexDirection: "column",
+    justifyContent: "center",
     alignItems: "center",
     height: "100%",
+    padding: "0 40px",
     textAlign: "center",
-    borderRadius: 0,
+    color: dark ? "#8696a0" : "#667781",
+    fontSize: 14,
+    lineHeight: "20px",
   },
-}));
+  welcomeIcon: {
+    fontSize: 120,
+    marginBottom: 24,
+    color: dark ? "#364147" : "#c5ccd0",
+  },
+  welcomeTitle: {
+    fontSize: 32,
+    fontWeight: 300,
+    marginBottom: 16,
+    color: dark ? "#e9edef" : "#41525d",
+  },
+  };
+});
 
 const maxListWidth = () => Math.max(MIN_LIST_WIDTH, window.innerWidth * 0.6);
 
@@ -191,9 +211,11 @@ const Conversations = () => {
           {contactId ? (
             <Conversation contactId={contactId} />
           ) : (
-            <Paper className={classes.welcomeMsg}>
+            <div className={classes.welcomeMsg}>
+              <WhatsAppIcon className={classes.welcomeIcon} />
+              <div className={classes.welcomeTitle}>WhatsApp Web</div>
               <span>{i18n.t("conversations.selectConversation")}</span>
-            </Paper>
+            </div>
           )}
         </div>
       </div>

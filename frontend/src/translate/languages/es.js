@@ -286,6 +286,7 @@ const messages = {
         yesterday: "Ayer",
       },
       conversations: {
+        title: "Chats",
         dropFiles: "Suelta los archivos aquí para enviar",
         searchPlaceholder: "Buscar conversación",
         empty: "No se encontraron conversaciones",

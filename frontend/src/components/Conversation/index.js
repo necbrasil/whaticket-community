@@ -58,9 +58,30 @@ const useStyles = makeStyles((theme) => ({
   header: {
     display: "flex",
     alignItems: "center",
-    backgroundColor: theme.palette.type === "dark" ? "#202c33" : "#eee",
+    backgroundColor: theme.palette.type === "dark" ? "#202c33" : "#f0f2f5",
     flex: "none",
-    borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
+    height: 59,
+    boxShadow: "none",
+    "& .MuiCardHeader-root": {
+      padding: "0 16px",
+    },
+    "& .MuiCardHeader-avatar": {
+      marginRight: 15,
+    },
+    "& .MuiAvatar-root": {
+      width: 40,
+      height: 40,
+    },
+    "& .MuiCardHeader-title": {
+      fontSize: 16,
+      lineHeight: "21px",
+      color: theme.palette.type === "dark" ? "#e9edef" : "#111b21",
+    },
+    "& .MuiCardHeader-subheader": {
+      fontSize: 13,
+      lineHeight: "20px",
+      color: theme.palette.type === "dark" ? "#8696a0" : "#667781",
+    },
   },
   backButton: {
     [theme.breakpoints.up("md")]: {
@@ -205,7 +226,7 @@ const Conversation = ({ contactId }) => {
         </div>
       )}
       <Paper
-        variant="outlined"
+        square
         elevation={0}
         className={clsx(classes.mainWrapper, {
           [classes.mainWrapperShift]: drawerOpen,

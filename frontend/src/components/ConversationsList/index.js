@@ -2,23 +2,19 @@ import React, { useState, useEffect, useReducer, useRef } from "react";
 import { useHistory } from "react-router-dom";
 
 import { makeStyles } from "@material-ui/core/styles";
-import { green } from "@material-ui/core/colors";
 import {
   Avatar,
-  Badge,
-  Divider,
   IconButton,
   InputBase,
   List,
   ListItem,
   ListItemAvatar,
-  ListItemText,
-  Paper,
   Tooltip,
   Typography,
 } from "@material-ui/core";
 import SearchIcon from "@material-ui/icons/Search";
-import AddIcon from "@material-ui/icons/Add";
+import ArrowBackIcon from "@material-ui/icons/ArrowBack";
+import CreateIcon from "@material-ui/icons/Create";
 import GroupIcon from "@material-ui/icons/Group";
 import AccessTime from "@material-ui/icons/AccessTime";
 import Done from "@material-ui/icons/Done";
@@ -32,114 +28,184 @@ import TicketsListSkeleton from "../TicketsListSkeleton";
 import NewConversationModal from "../NewConversationModal";
 import { formatListTime } from "../../helpers/dates";
 
-const useStyles = makeStyles((theme) => ({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    overflow: "hidden",
-    borderTopRightRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  toolbar: {
-    display: "flex",
-    alignItems: "center",
-    padding: theme.spacing(1),
-    background: theme.palette.type === "dark" ? "#202c33" : "#fafafa",
-    borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
-  },
-  searchBox: {
-    display: "flex",
-    alignItems: "center",
-    flex: 1,
-    background: theme.palette.type === "dark" ? "#2a3942" : "#fff",
-    borderRadius: 40,
-    padding: "4px 12px",
-    marginRight: theme.spacing(1),
-  },
-  searchIcon: {
-    color: "grey",
-    marginRight: 6,
-  },
-  searchInput: {
-    flex: 1,
-  },
-  list: {
-    flex: 1,
-    overflowY: "scroll",
-    padding: 0,
-    ...theme.scrollbarStyles,
-  },
-  nameRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  name: {
-    display: "flex",
-    alignItems: "center",
-    minWidth: 0,
-  },
-  groupIcon: {
-    fontSize: 16,
-    color: "grey",
-    marginRight: 4,
-    flex: "none",
-  },
-  unreadName: {
-    fontWeight: 600,
-  },
-  time: {
-    flex: "none",
-    marginLeft: 8,
-  },
-  unreadTime: {
-    color: green[600],
-    fontWeight: 600,
-  },
-  previewRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  preview: {
-    minWidth: 0,
-    display: "flex",
-    alignItems: "center",
-  },
-  previewText: {
-    minWidth: 0,
-  },
-  unreadPreview: {
-    color: theme.palette.text.primary,
-    fontWeight: 600,
-  },
-  ackIcon: {
-    fontSize: 16,
-    marginRight: 3,
-    flex: "none",
-    color: "grey",
-  },
-  ackReadIcon: {
-    fontSize: 16,
-    marginRight: 3,
-    flex: "none",
-    color: "#34B7F1",
-  },
-  badge: {
-    color: "white",
-    backgroundColor: green[500],
-    position: "static",
-    transform: "none",
-    marginLeft: 8,
-  },
-  empty: {
-    textAlign: "center",
-    color: "rgb(104, 121, 146)",
-    fontSize: 14,
-    margin: 40,
-  },
-}));
+// colors and sizes follow WhatsApp Web
+const useStyles = makeStyles((theme) => {
+  const dark = theme.palette.type === "dark";
+  const textPrimary = dark ? "#e9edef" : "#111b21";
+  const textSecondary = dark ? "#8696a0" : "#667781";
+  const divider = dark ? "#222d34" : "#e9edef";
+  return {
+    root: {
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      overflow: "hidden",
+      backgroundColor: dark ? "#111b21" : "#fff",
+    },
+    header: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flex: "none",
+      height: 59,
+      padding: "0 16px",
+    },
+    title: {
+      fontSize: 22,
+      fontWeight: 700,
+      color: textPrimary,
+    },
+    headerIcon: {
+      color: dark ? "#aebac1" : "#54656f",
+    },
+    searchRow: {
+      flex: "none",
+      padding: "7px 12px 8px",
+    },
+    searchBox: {
+      display: "flex",
+      alignItems: "center",
+      height: 35,
+      background: dark ? "#202c33" : "#f0f2f5",
+      borderRadius: 8,
+      padding: "0 12px",
+    },
+    searchIcon: {
+      fontSize: 18,
+      color: textSecondary,
+      marginRight: 24,
+      flex: "none",
+    },
+    searchBack: {
+      fontSize: 18,
+      color: "#00a884",
+      marginRight: 24,
+      flex: "none",
+      cursor: "pointer",
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      color: textPrimary,
+    },
+    list: {
+      flex: 1,
+      overflowY: "auto",
+      padding: 0,
+      ...theme.scrollbarStyles,
+    },
+    item: {
+      height: 72,
+      padding: "0 0 0 15px",
+      "&:hover": {
+        backgroundColor: dark ? "#202c33" : "#f5f6f6",
+      },
+      "&.Mui-selected, &.Mui-selected:hover": {
+        backgroundColor: dark ? "#2a3942" : "#f0f2f5",
+      },
+    },
+    avatar: {
+      width: 49,
+      height: 49,
+    },
+    avatarWrapper: {
+      minWidth: 0,
+      marginRight: 15,
+    },
+    content: {
+      flex: 1,
+      minWidth: 0,
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      paddingRight: 15,
+      borderBottom: `1px solid ${divider}`,
+    },
+    nameRow: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    name: {
+      display: "flex",
+      alignItems: "center",
+      minWidth: 0,
+      fontSize: 17,
+      lineHeight: "21px",
+      color: textPrimary,
+    },
+    nameText: {
+      fontSize: "inherit",
+      lineHeight: "inherit",
+    },
+    groupIcon: {
+      fontSize: 16,
+      color: textSecondary,
+      marginRight: 4,
+      flex: "none",
+    },
+    time: {
+      flex: "none",
+      marginLeft: 8,
+      fontSize: 12,
+      color: textSecondary,
+    },
+    unreadTime: {
+      color: dark ? "#00a884" : "#1fa855",
+    },
+    previewRow: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginTop: 2,
+    },
+    preview: {
+      minWidth: 0,
+      display: "flex",
+      alignItems: "center",
+    },
+    previewText: {
+      minWidth: 0,
+      fontSize: 14,
+      lineHeight: "20px",
+      color: textSecondary,
+    },
+    ackIcon: {
+      fontSize: 16,
+      marginRight: 3,
+      flex: "none",
+      color: textSecondary,
+    },
+    ackReadIcon: {
+      fontSize: 16,
+      marginRight: 3,
+      flex: "none",
+      color: "#53bdeb",
+    },
+    badge: {
+      flex: "none",
+      minWidth: 20,
+      height: 20,
+      padding: "0 6px",
+      marginLeft: 8,
+      borderRadius: 10,
+      boxSizing: "border-box",
+      textAlign: "center",
+      fontSize: 12,
+      fontWeight: 600,
+      lineHeight: "20px",
+      color: dark ? "#111b21" : "#fff",
+      backgroundColor: dark ? "#00a884" : "#25d366",
+    },
+    empty: {
+      textAlign: "center",
+      color: textSecondary,
+      fontSize: 14,
+      margin: 40,
+    },
+  };
+});
 
 const reducer = (state, action) => {
   switch (action.type) {
@@ -340,14 +406,33 @@ const ConversationsList = ({ selectedContactId }) => {
   };
 
   return (
-    <Paper square elevation={0} variant="outlined" className={classes.root}>
+    <div className={classes.root}>
       <NewConversationModal
         open={newConversationOpen}
         onClose={() => setNewConversationOpen(false)}
       />
-      <div className={classes.toolbar}>
+      <div className={classes.header}>
+        <span className={classes.title}>{i18n.t("conversations.title")}</span>
+        <Tooltip title={i18n.t("conversations.newConversation.title")}>
+          <IconButton
+            size="small"
+            className={classes.headerIcon}
+            onClick={() => setNewConversationOpen(true)}
+          >
+            <CreateIcon />
+          </IconButton>
+        </Tooltip>
+      </div>
+      <div className={classes.searchRow}>
         <div className={classes.searchBox}>
-          <SearchIcon className={classes.searchIcon} />
+          {searchParam ? (
+            <ArrowBackIcon
+              className={classes.searchBack}
+              onClick={() => setSearchParam("")}
+            />
+          ) : (
+            <SearchIcon className={classes.searchIcon} />
+          )}
           <InputBase
             className={classes.searchInput}
             placeholder={i18n.t("conversations.searchPlaceholder")}
@@ -355,83 +440,63 @@ const ConversationsList = ({ selectedContactId }) => {
             onChange={(e) => setSearchParam(e.target.value)}
           />
         </div>
-        <Tooltip title={i18n.t("conversations.newConversation.title")}>
-          <IconButton size="small" onClick={() => setNewConversationOpen(true)}>
-            <AddIcon />
-          </IconButton>
-        </Tooltip>
       </div>
       <List className={classes.list} onScroll={handleScroll}>
         {conversations.map((conversation) => {
           const { contact, unread } = conversation;
           return (
-            <React.Fragment key={contact.id}>
-              <ListItem
-                button
-                dense
-                selected={String(contact.id) === String(selectedContactId)}
-                onClick={() => handleSelect(contact.id)}
-              >
-                <ListItemAvatar>
-                  <Avatar src={contact.profilePicUrl} />
-                </ListItemAvatar>
-                <ListItemText
-                  disableTypography
-                  primary={
-                    <div className={classes.nameRow}>
-                      <span className={classes.name}>
-                        {contact.isGroup && (
-                          <GroupIcon className={classes.groupIcon} />
-                        )}
-                        <Typography
-                          noWrap
-                          variant="body2"
-                          component="span"
-                          className={unread ? classes.unreadName : undefined}
-                        >
-                          {contact.name}
-                        </Typography>
-                      </span>
-                      <Typography
-                        variant="caption"
-                        color="textSecondary"
-                        className={`${classes.time} ${
-                          unread ? classes.unreadTime : ""
-                        }`}
-                      >
-                        {formatListTime(conversation.updatedAt)}
-                      </Typography>
-                    </div>
-                  }
-                  secondary={
-                    <div className={classes.previewRow}>
-                      <span className={classes.preview}>
-                        {conversation.lastMessageFromMe &&
-                          renderAck(conversation.lastMessageAck, classes)}
-                        <Typography
-                          noWrap
-                          variant="body2"
-                          color="textSecondary"
-                          component="span"
-                          className={`${classes.previewText} ${
-                            unread ? classes.unreadPreview : ""
-                          }`}
-                        >
-                          {formatPreview(conversation)}
-                        </Typography>
-                      </span>
-                      {unread > 0 && (
-                        <Badge
-                          badgeContent={unread}
-                          classes={{ badge: classes.badge }}
-                        />
-                      )}
-                    </div>
-                  }
-                />
-              </ListItem>
-              <Divider variant="inset" component="li" />
-            </React.Fragment>
+            <ListItem
+              key={contact.id}
+              button
+              className={classes.item}
+              selected={String(contact.id) === String(selectedContactId)}
+              onClick={() => handleSelect(contact.id)}
+            >
+              <ListItemAvatar className={classes.avatarWrapper}>
+                <Avatar className={classes.avatar} src={contact.profilePicUrl} />
+              </ListItemAvatar>
+              <div className={classes.content}>
+                <div className={classes.nameRow}>
+                  <span className={classes.name}>
+                    {contact.isGroup && (
+                      <GroupIcon className={classes.groupIcon} />
+                    )}
+                    <Typography
+                      noWrap
+                      component="span"
+                      className={classes.nameText}
+                    >
+                      {contact.name}
+                    </Typography>
+                  </span>
+                  <span
+                    className={`${classes.time} ${
+                      unread ? classes.unreadTime : ""
+                    }`}
+                  >
+                    {formatListTime(conversation.updatedAt)}
+                  </span>
+                </div>
+                <div className={classes.previewRow}>
+                  <span className={classes.preview}>
+                    {conversation.lastMessageFromMe &&
+                      renderAck(conversation.lastMessageAck, classes)}
+                    <Typography
+                      noWrap
+                      component="span"
+                      className={classes.previewText}
+                    >
+                      {formatPreview(conversation)}
+                    </Typography>
+                  </span>
+                  {unread > 0 && (
+                    <span className={classes.badge}>
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </ListItem>
           );
         })}
         {loading && <TicketsListSkeleton />}
@@ -439,7 +504,7 @@ const ConversationsList = ({ selectedContactId }) => {
           <div className={classes.empty}>{i18n.t("conversations.empty")}</div>
         )}
       </List>
-    </Paper>
+    </div>
   );
 };
 

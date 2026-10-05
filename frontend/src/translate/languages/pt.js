@@ -285,6 +285,7 @@ const messages = {
         yesterday: "Ontem",
       },
       conversations: {
+        title: "Conversas",
         dropFiles: "Solte os arquivos aqui para enviar",
         searchPlaceholder: "Pesquisar conversa",
         empty: "Nenhuma conversa encontrada",
