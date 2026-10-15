@@ -15,6 +15,7 @@ interface MessageData {
   ack?: number;
   quotedMsgId?: string;
   messageSecret?: string;
+  mentions?: string[];
 }
 interface Request {
   messageData: MessageData;

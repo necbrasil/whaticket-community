@@ -20,6 +20,7 @@ import {
   Fab,
   IconButton,
   makeStyles,
+  useTheme,
 } from "@material-ui/core";
 import {
   AccessTime,
@@ -476,6 +477,9 @@ const MessagesList = ({
   onInitialLoad,
 }) => {
   const classes = useStyles();
+  // mention colors follow WhatsApp Web
+  const mentionColor =
+    useTheme().palette.type === "dark" ? "#53bdeb" : "#027eb5";
 
   const [messagesList, dispatch] = useReducer(reducer, []);
   const [pageNumber, setPageNumber] = useState(1);
@@ -1048,7 +1052,12 @@ const MessagesList = ({
                   )}
                   {message.quotedMsg && renderQuotedMessage(message)}
                   {!isSticker(message) && (
-                    <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                    <MarkdownWrapper
+                      mentions={message.mentions}
+                      mentionColor={mentionColor}
+                    >
+                      {message.body}
+                    </MarkdownWrapper>
                   )}
                   <span
                     className={clsx(classes.timestampSpacer, {
@@ -1107,7 +1116,12 @@ const MessagesList = ({
                   )}
                   {message.quotedMsg && renderQuotedMessage(message)}
                   {!isSticker(message) && (
-                    <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                    <MarkdownWrapper
+                      mentions={message.mentions}
+                      mentionColor={mentionColor}
+                    >
+                      {message.body}
+                    </MarkdownWrapper>
                   )}
                   <span
                     className={clsx(classes.timestampSpacer, {

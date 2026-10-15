@@ -50,6 +50,8 @@ export interface MessagePayload {
   ack?: MessageAck;
   // base64; lets WhatsApp edits of this message be decrypted later
   messageSecret?: string;
+  // names shown for the people mentioned in the body
+  mentionedNames?: string[];
 }
 
 export interface MediaPayload {
@@ -286,6 +288,7 @@ export const handleMessage = async (
       mediaType: processedMessage.type,
       quotedMsgId: processedMessage.quotedMsgId,
       messageSecret: processedMessage.messageSecret,
+      mentions: processedMessage.mentionedNames,
       ack: processedMessage.ack !== undefined ? processedMessage.ack : 0
     };
 
@@ -436,6 +439,7 @@ export const importHistoryChat = async ({
         mediaType: message.type,
         quotedMsgId: quotedMsgExists ? message.quotedMsgId : undefined,
         messageSecret: message.messageSecret,
+        mentions: message.mentionedNames,
         ack: message.ack !== undefined ? message.ack : 0,
         createdAt: date,
         updatedAt: date

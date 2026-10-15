@@ -138,8 +138,12 @@ const prepareLocation = (msg: WbotMessage): WbotMessage => {
 };
 
 // WhatsApp writes mentions as "@<number>"; show the person's name
-const resolveMentions = async (msg: WbotMessage): Promise<string> => {
-  if (msg.type !== "chat" || !msg.mentionedIds?.length) return msg.body;
+const resolveMentions = async (
+  msg: WbotMessage
+): Promise<{ body: string; names: string[] }> => {
+  if (msg.type !== "chat" || !msg.mentionedIds?.length) {
+    return { body: msg.body, names: [] };
+  }
 
   try {
     const mentioned = await msg.getMentions();
@@ -147,13 +151,17 @@ const resolveMentions = async (msg: WbotMessage): Promise<string> => {
       mentioned.map(contact => contact.id.user)
     );
 
-    return mentioned.reduce((result, contact) => {
+    const shown: string[] = [];
+    const body = mentioned.reduce((result, contact) => {
       const { user } = contact.id;
+      if (!result.includes(`@${user}`)) return result;
       const name = names.get(user) || contact.name || contact.pushname;
+      shown.push(name || user);
       return name ? result.split(`@${user}`).join(`@${name}`) : result;
     }, msg.body);
+    return { body, names: [...new Set(shown)] };
   } catch {
-    return msg.body;
+    return { body: msg.body, names: [] };
   }
 };
 
@@ -167,9 +175,12 @@ const convertToMessagePayload = async (
 
   const quotedMsgId = await verifyQuotedMessage(processedMsg);
 
+  const mentions = await resolveMentions(processedMsg);
+
   return {
     id: processedMsg.id.id,
-    body: await resolveMentions(processedMsg),
+    body: mentions.body,
+    mentionedNames: mentions.names,
     fromMe: processedMsg.fromMe,
     hasMedia: processedMsg.hasMedia,
     type: mapMessageType(processedMsg.type),

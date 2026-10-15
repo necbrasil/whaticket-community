@@ -2,12 +2,15 @@
 //   string | { type: "bold" | "italic" | "strike", children: Node[] }
 //          | { type: "code" | "mono", text: string }
 //          | { type: "link", text: string, href: string }
+//          | { type: "mention", text: string }   (text includes the "@")
 
 const MARKERS = { "*": "bold", _: "italic", "~": "strike" };
 const URL_REGEX = /^(?:https?:\/\/|www\.)[^\s]+/i;
 const TRAILING_PUNCT = /[.,;:!?)\]}'"]+$/;
 const ALNUM = /[\p{L}\p{N}]/u;
 const SPACE = /\s/;
+// unresolved mentions stay as "@<number>"
+const MENTION_NUMBER = /^@\d{5,}/;
 
 const isAlnum = ch => ch !== undefined && ALNUM.test(ch);
 const isSpace = ch => ch !== undefined && SPACE.test(ch);
@@ -28,8 +31,24 @@ const findClosing = (text, from, marker) => {
 	return -1;
 };
 
-const parseWhatsAppText = text => {
+const matchMention = (text, i, names) => {
+	for (const name of names) {
+		const end = i + 1 + name.length;
+		if (text.startsWith(name, i + 1) && !isAlnum(text[end])) {
+			return `@${name}`;
+		}
+	}
+	const number = MENTION_NUMBER.exec(text.slice(i));
+	if (number && !isAlnum(text[i + number[0].length])) return number[0];
+	return null;
+};
+
+// mentions: names shown for the people tagged in the message (optional)
+const parseWhatsAppText = (text, mentions) => {
 	const nodes = [];
+	const names = (mentions || [])
+		.filter(name => typeof name === "string" && name)
+		.sort((a, b) => b.length - a.length);
 	let buffer = "";
 
 	const flush = () => {
@@ -80,6 +99,16 @@ const parseWhatsAppText = text => {
 			}
 		}
 
+		if (ch === "@" && !isAlnum(prev)) {
+			const mention = matchMention(text, i, names);
+			if (mention) {
+				flush();
+				nodes.push({ type: "mention", text: mention });
+				i += mention.length;
+				continue;
+			}
+		}
+
 		const type = MARKERS[ch];
 		if (
 			type &&
@@ -93,7 +122,7 @@ const parseWhatsAppText = text => {
 				flush();
 				nodes.push({
 					type,
-					children: parseWhatsAppText(text.slice(i + 1, end)),
+					children: parseWhatsAppText(text.slice(i + 1, end), mentions),
 				});
 				i = end + 1;
 				continue;

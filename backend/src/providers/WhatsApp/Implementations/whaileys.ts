@@ -916,27 +916,30 @@ const getMentionName = async (
   return isLid ? undefined : user;
 };
 
-// WhatsApp writes mentions as "@<number or LID>"; show the person's name
+// WhatsApp writes mentions as "@<number or LID>"; show the person's name.
+// Also returns the names as displayed, so the UI can highlight them.
 const resolveMentions = async (
   body: string,
   msg: WAMessage,
   wbot: Session
-): Promise<string> => {
+): Promise<{ body: string; names: string[] }> => {
   const jids = getMentionedJids(msg);
-  if (!body || jids.length === 0) return body;
+  if (!body || jids.length === 0) return { body, names: [] };
 
   let result = body;
+  const names: string[] = [];
   /* eslint-disable no-restricted-syntax, no-await-in-loop */
   for (const jid of jids) {
     const user = jidDecode(jid)?.user;
     if (user && result.includes(`@${user}`)) {
       const name = await getMentionName(jid, user, wbot);
       if (name) result = result.split(`@${user}`).join(`@${name}`);
+      names.push(name || user);
     }
   }
   /* eslint-enable no-restricted-syntax, no-await-in-loop */
 
-  return result;
+  return { body: result, names: [...new Set(names)] };
 };
 
 const getMessageData = async (
@@ -961,7 +964,9 @@ const getMessageData = async (
 
   const contactPayload = await convertToContactPayload(contactJid, msg, wbot);
   const messagePayload = convertToMessagePayload(msg);
-  messagePayload.body = await resolveMentions(messagePayload.body, msg, wbot);
+  const mentions = await resolveMentions(messagePayload.body, msg, wbot);
+  messagePayload.body = mentions.body;
+  messagePayload.mentionedNames = mentions.names;
   const mediaPayload = await convertToMediaPayload(msg, wbot);
 
   const contextPayload: WhatsappContextPayload = {
@@ -1044,10 +1049,16 @@ const importHistory = async (
           }
         }
 
+        const mentions = await resolveMentions(
+          getMessageBody(msg),
+          msg,
+          wbot
+        );
         historyMessages.push({
           message: {
             ...convertToMessagePayload(msg),
-            body: await resolveMentions(getMessageBody(msg), msg, wbot)
+            body: mentions.body,
+            mentionedNames: mentions.names
           },
           sender,
           downloadMedia: hasMedia(msg)

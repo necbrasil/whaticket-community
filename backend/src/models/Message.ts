@@ -104,6 +104,27 @@ class Message extends Model<Message> {
     );
   }
 
+  // names shown for the people mentioned in the body (@Name)
+  @Column(DataType.TEXT)
+  get mentions(): string[] {
+    const value = this.getDataValue("mentions") as unknown as string | null;
+    if (!value) return [];
+    try {
+      return JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+
+  set mentions(value: string[]) {
+    this.setDataValue(
+      "mentions",
+      (value && value.length
+        ? JSON.stringify(value)
+        : null) as unknown as string[]
+    );
+  }
+
   @CreatedAt
   @Column(DataType.DATE(6))
   createdAt: Date;
