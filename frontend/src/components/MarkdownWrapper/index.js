@@ -1,147 +1,6 @@
 import React from "react";
-import Markdown from "markdown-to-jsx";
 
-const elements = [
-	"a",
-	"abbr",
-	"address",
-	"area",
-	"article",
-	"aside",
-	"audio",
-	"b",
-	"base",
-	"bdi",
-	"bdo",
-	"big",
-	"blockquote",
-	"body",
-	"br",
-	"button",
-	"canvas",
-	"caption",
-	"cite",
-	"code",
-	"col",
-	"colgroup",
-	"data",
-	"datalist",
-	"dd",
-	"del",
-	"details",
-	"dfn",
-	"dialog",
-	"div",
-	"dl",
-	"dt",
-	"em",
-	"embed",
-	"fieldset",
-	"figcaption",
-	"figure",
-	"footer",
-	"form",
-	"h1",
-	"h2",
-	"h3",
-	"h4",
-	"h5",
-	"h6",
-	"head",
-	"header",
-	"hgroup",
-	"hr",
-	"html",
-	"i",
-	"iframe",
-	"img",
-	"input",
-	"ins",
-	"kbd",
-	"keygen",
-	"label",
-	"legend",
-	"li",
-	"link",
-	"main",
-	"map",
-	"mark",
-	"marquee",
-	"menu",
-	"menuitem",
-	"meta",
-	"meter",
-	"nav",
-	"noscript",
-	"object",
-	"ol",
-	"optgroup",
-	"option",
-	"output",
-	"p",
-	"param",
-	"picture",
-	"pre",
-	"progress",
-	"q",
-	"rp",
-	"rt",
-	"ruby",
-	"s",
-	"samp",
-	"script",
-	"section",
-	"select",
-	"small",
-	"source",
-	"span",
-	"strong",
-	"style",
-	"sub",
-	"summary",
-	"sup",
-	"table",
-	"tbody",
-	"td",
-	"textarea",
-	"tfoot",
-	"th",
-	"thead",
-	"time",
-	"title",
-	"tr",
-	"track",
-	"u",
-	"ul",
-	"var",
-	"video",
-	"wbr",
-
-	// SVG
-	"circle",
-	"clipPath",
-	"defs",
-	"ellipse",
-	"foreignObject",
-	"g",
-	"image",
-	"line",
-	"linearGradient",
-	"marker",
-	"mask",
-	"path",
-	"pattern",
-	"polygon",
-	"polyline",
-	"radialGradient",
-	"rect",
-	"stop",
-	"svg",
-	"text",
-	"tspan",
-];
-
-const allowedElements = ["a", "b", "strong", "em", "u", "code", "del"];
+import parseWhatsAppText from "./parseWhatsAppText";
 
 const CustomLink = ({ children, ...props }) => (
 	<a {...props} target="_blank" rel="noopener noreferrer">
@@ -149,45 +8,47 @@ const CustomLink = ({ children, ...props }) => (
 	</a>
 );
 
+const monoStyle = { fontFamily: "Menlo, Consolas, 'Courier New', monospace" };
+
+const renderNodes = nodes =>
+	nodes.map((node, index) => {
+		if (typeof node === "string") return node;
+
+		switch (node.type) {
+			case "bold":
+				return <strong key={index}>{renderNodes(node.children)}</strong>;
+			case "italic":
+				return <em key={index}>{renderNodes(node.children)}</em>;
+			case "strike":
+				return <del key={index}>{renderNodes(node.children)}</del>;
+			case "code":
+			case "mono":
+				return (
+					<code key={index} style={monoStyle}>
+						{node.text}
+					</code>
+				);
+			case "link":
+				return (
+					<CustomLink key={index} href={node.href}>
+						{node.text}
+					</CustomLink>
+				);
+			default:
+				return null;
+		}
+	});
+
 const MarkdownWrapper = ({ children }) => {
-	const boldRegex = /\*(.*?)\*/g;
-	const tildaRegex = /~(.*?)~/g;
-	
-	if(children && children.includes('BEGIN:VCARD'))
-		//children = "Diga olá ao seu novo contato clicando em *conversar*!";
-		children = null;
-	
-	if(children && children.includes('data:image/'))
-		children = null;
-	
-	if (children && boldRegex.test(children)) {
-		children = children.replace(boldRegex, "**$1**");
-	}
-	if (children && tildaRegex.test(children)) {
-		children = children.replace(tildaRegex, "~~$1~~");
-	}
+	if (children === null || children === undefined) return null;
 
-	const options = React.useMemo(() => {
-		const markdownOptions = {
-			disableParsingRawHTML: true,
-			forceInline: true,
-			overrides: {
-				a: { component: CustomLink },
-			},
-		};
+	const text = String(children).replace(/\r\n?/g, "\n");
 
-		elements.forEach(element => {
-			if (!allowedElements.includes(element)) {
-				markdownOptions.overrides[element] = el => el.children || null;
-			}
-		});
+	if (!text) return null;
+	if (text.includes("BEGIN:VCARD")) return null;
+	if (text.includes("data:image/")) return null;
 
-		return markdownOptions;
-	}, []);
-
-	if (!children) return null;
-	
-	return <Markdown options={options}>{children}</Markdown>;
+	return <>{renderNodes(parseWhatsAppText(text))}</>;
 };
 
 export default MarkdownWrapper;

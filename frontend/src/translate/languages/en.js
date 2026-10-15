@@ -404,6 +404,9 @@ const messages = {
         },
       },
       messagesList: {
+        photoUnavailable: "Photo unavailable",
+        stickerUnavailable: "Sticker unavailable",
+        mediaUnavailable: "Media unavailable",
         unreadSeparator: "{{count}} unread message",
         unreadSeparator_plural: "{{count}} unread messages",
         deleted: "deleted",

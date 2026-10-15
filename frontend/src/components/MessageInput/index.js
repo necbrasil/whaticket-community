@@ -245,6 +245,9 @@ const useStyles = makeStyles(theme => {
     display: "block",
     whiteSpace: "pre-wrap",
     overflow: "hidden",
+    minWidth: 0,
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   replyginContactMsgSideColor: {
@@ -288,12 +291,41 @@ const useStyles = makeStyles(theme => {
       },
     },
   },
+  messageMentionsWrapper: {
+    maxHeight: "240px",
+    overflowY: "auto",
+    zIndex: 10,
+    "& li a.active": {
+      background: dark ? "#2a3942" : "#F1F1F1",
+    },
+  },
   };
 });
 
+// lowercase and accent-free, to match what the user types
+const normalizeSearch = text =>
+  (text || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+
+// "@query" right before the cursor, at the start of the text or after a space
+const findMention = (text, cursor) => {
+  const match = /(^|\s)@([^\s@]*)$/.exec(text.slice(0, cursor));
+  if (!match) return null;
+  return { start: cursor - match[2].length - 1, query: match[2] };
+};
+
 // Outside a ticket route (conversations page) the caller passes getTicketId,
 // resolved on each send, and resetKey to clear the input when the chat changes.
-const MessageInput = ({ ticketStatus, getTicketId, resetKey, droppedFiles }) => {
+// isGroup enables the "@" mentions list.
+const MessageInput = ({
+  ticketStatus,
+  getTicketId,
+  resetKey,
+  droppedFiles,
+  isGroup,
+}) => {
   const classes = useStyles();
   const theme = useTheme();
   const { ticketId } = useParams();
@@ -308,6 +340,12 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey, droppedFiles }) => 
   const [recording, setRecording] = useState(false);
   const [quickAnswers, setQuickAnswer] = useState([]);
   const [typeBar, setTypeBar] = useState(false);
+  const [participants, setParticipants] = useState([]);
+  const [mention, setMention] = useState(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  // people picked from the list, kept while their "@Name" is still in the text
+  const mentionsRef = useRef([]);
+  const participantsLoadedRef = useRef(false);
   const inputRef = useRef();
   const [anchorEl, setAnchorEl] = useState(null);
   const { setReplyingMessage, replyingMessage } =
@@ -328,6 +366,10 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey, droppedFiles }) => 
       setMedias([]);
       setCaption("");
       setReplyingMessage(null);
+      setMention(null);
+      setParticipants([]);
+      mentionsRef.current = [];
+      participantsLoadedRef.current = false;
     };
   }, [ticketId, resetKey, setReplyingMessage]);
 
@@ -355,9 +397,77 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey, droppedFiles }) => 
     [mediaPreviews]
   );
 
+  const loadParticipants = async () => {
+    if (participantsLoadedRef.current) return;
+    participantsLoadedRef.current = true;
+    try {
+      const { data } = await api.get(
+        `/tickets/${await resolveTicketId()}/participants`
+      );
+      setParticipants(data);
+    } catch (err) {
+      participantsLoadedRef.current = false;
+      toastError(err);
+    }
+  };
+
+  const mentionOptions = useMemo(() => {
+    if (!mention) return [];
+    const query = normalizeSearch(mention.query);
+    return participants
+      .filter(
+        p =>
+          normalizeSearch(p.name).includes(query) || p.number.includes(query)
+      )
+      .slice(0, 30);
+  }, [mention, participants]);
+
   const handleChangeInput = e => {
-    setInputMessage(e.target.value);
-    handleLoadQuickAnswer(e.target.value);
+    const { value, selectionStart } = e.target;
+    setInputMessage(value);
+    handleLoadQuickAnswer(value);
+
+    const found = isGroup ? findMention(value, selectionStart) : null;
+    setMention(found);
+    setMentionIndex(0);
+    if (found) loadParticipants();
+  };
+
+  const handleSelectMention = participant => {
+    const before = inputMessage.slice(0, mention.start);
+    const after = inputMessage.slice(mention.start + 1 + mention.query.length);
+    const inserted = `@${participant.name} `;
+    const cursor = before.length + inserted.length;
+
+    setInputMessage(`${before}${inserted}${after}`);
+    setMention(null);
+    if (!mentionsRef.current.some(m => m.id === participant.id)) {
+      mentionsRef.current.push(participant);
+    }
+
+    setTimeout(() => {
+      if (!inputRef.current) return;
+      inputRef.current.focus();
+      inputRef.current.setSelectionRange(cursor, cursor);
+    }, 0);
+  };
+
+  const handleMentionKeyDown = e => {
+    if (!mention || mentionOptions.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setMentionIndex(i => (i + 1) % mentionOptions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setMentionIndex(i => (i - 1 + mentionOptions.length) % mentionOptions.length);
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      handleSelectMention(mentionOptions[mentionIndex] || mentionOptions[0]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setMention(null);
+    }
   };
 
   const handleQuickAnswersClick = value => {
@@ -430,12 +540,20 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey, droppedFiles }) => 
         : inputMessage.trim(),
       quotedMsg: replyingMessage,
     };
+    if (isGroup) {
+      const mentions = mentionsRef.current.filter(m =>
+        message.body.includes(`@${m.name}`)
+      );
+      if (mentions.length) message.mentions = mentions;
+    }
     try {
       await api.post(`/messages/${await resolveTicketId()}`, message);
     } catch (err) {
       toastError(err);
     }
 
+    mentionsRef.current = [];
+    setMention(null);
     setInputMessage("");
     setShowEmoji(false);
     setLoading(false);
@@ -777,13 +895,40 @@ const MessageInput = ({ ticketStatus, getTicketId, resetKey, droppedFiles }) => 
               onPaste={e => {
                 ticketStatus === "open" && handleInputPaste(e);
               }}
+              onKeyDown={handleMentionKeyDown}
               onKeyPress={e => {
                 if (loading || e.shiftKey) return;
                 else if (e.key === "Enter") {
+                  if (mention && mentionOptions.length > 0) return;
                   handleSendMessage();
                 }
               }}
             />
+            {mention && mentionOptions.length > 0 && (
+              <ul
+                className={clsx(
+                  classes.messageQuickAnswersWrapper,
+                  classes.messageMentionsWrapper
+                )}
+              >
+                {mentionOptions.map((participant, index) => (
+                  <li key={participant.id}>
+                    {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
+                    <a
+                      className={index === mentionIndex ? "active" : undefined}
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        handleSelectMention(participant);
+                      }}
+                    >
+                      {participant.name === participant.number
+                        ? participant.name
+                        : `${participant.name} - ${participant.number}`}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
             {typeBar ? (
               <ul className={classes.messageQuickAnswersWrapper}>
                 {quickAnswers.map((value, index) => {

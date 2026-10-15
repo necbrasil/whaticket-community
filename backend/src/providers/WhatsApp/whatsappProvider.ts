@@ -4,7 +4,8 @@ import {
   ProviderMediaInput,
   ProviderContact,
   SendMessageOptions,
-  SendMediaOptions
+  SendMediaOptions,
+  GroupParticipant
 } from "./types";
 import { WhatsappWebJsProvider } from "./Implementations/wwebjs";
 import { WhaileysProvider } from "./Implementations/whaileys";
@@ -46,6 +47,10 @@ export interface WhatsappProvider {
     chatId: string,
     limit: number
   ): Promise<ProviderMessage[]>;
+  getGroupParticipants(
+    sessionId: number,
+    groupId: string
+  ): Promise<GroupParticipant[]>;
 }
 
 const provider = process.env.WHATSAPP_PROVIDER || "wwebjs";

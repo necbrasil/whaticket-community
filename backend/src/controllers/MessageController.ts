@@ -20,6 +20,8 @@ type MessageData = {
   fromMe: boolean;
   read: boolean;
   quotedMsg?: Message;
+  // group chats: people mentioned with "@Name" in the body
+  mentions?: { id: string; number: string; name: string }[];
   // attachments only: sent as the first file's caption
   caption?: string;
   // attachments only: the message being replied to
@@ -42,7 +44,13 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
-  const { body, quotedMsg, caption, quotedMsgId }: MessageData = req.body;
+  const {
+    body,
+    quotedMsg,
+    mentions,
+    caption,
+    quotedMsgId
+  }: MessageData = req.body;
   const medias = req.files as Express.Multer.File[];
 
   const ticket = await ShowTicketService(ticketId);
@@ -61,7 +69,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       })
     );
   } else {
-    await SendWhatsAppMessage({ body, ticket, quotedMsg });
+    await SendWhatsAppMessage({ body, ticket, quotedMsg, mentions });
   }
 
   return res.send();

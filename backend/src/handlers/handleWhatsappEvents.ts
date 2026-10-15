@@ -95,7 +95,9 @@ const sanitizeFileName = (name: string): string =>
     .replace(/[<>:"|?*\u0000-\u001f]/g, "_")
     .replace(/^\.+/, "");
 
-const saveMediaFile = async (mediaPayload: MediaPayload): Promise<string> => {
+const saveMediaFile = async (
+  mediaPayload: MediaPayload
+): Promise<string | undefined> => {
   const randomId = makeRandomId(5);
   const originalFilename = sanitizeFileName(mediaPayload.filename || "");
 
@@ -118,7 +120,8 @@ const saveMediaFile = async (mediaPayload: MediaPayload): Promise<string> => {
     }
   } catch (err) {
     Sentry.captureException(err);
-    logger.error(err);
+    logger.error({ info: "Error saving media file", err, filename });
+    return undefined;
   }
 
   return filename;
@@ -288,10 +291,15 @@ export const handleMessage = async (
 
     if (mediaPayload && processedMessage.hasMedia) {
       const filename = await saveMediaFile(mediaPayload);
-      messageData.mediaUrl = filename;
-      messageData.body = processedMessage.body || filename;
-      const [mediaType] = mediaPayload.mimetype.split("/");
-      messageData.mediaType = mediaType;
+      if (filename) {
+        messageData.mediaUrl = filename;
+        messageData.body = processedMessage.body || filename;
+        // Stickers keep their own type so the UI can render them differently
+        if (processedMessage.type !== "sticker") {
+          const [mediaType] = mediaPayload.mimetype.split("/");
+          messageData.mediaType = mediaType;
+        }
+      }
     }
 
     let lastMessageText = "";

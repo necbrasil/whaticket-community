@@ -169,7 +169,10 @@ const Ticket = () => {
             ticketId={ticketId}
             isGroup={ticket.isGroup}
           ></MessagesList>
-          <MessageInput ticketStatus={ticket.status} />
+          <MessageInput
+            ticketStatus={ticket.status}
+            isGroup={ticket.isGroup}
+          />
         </ReplyMessageProvider>
       </Paper>
       <ContactDrawer

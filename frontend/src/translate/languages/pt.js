@@ -408,6 +408,9 @@ const messages = {
         },
       },
       messagesList: {
+        photoUnavailable: "Foto indisponível",
+        stickerUnavailable: "Figurinha indisponível",
+        mediaUnavailable: "Mídia indisponível",
         unreadSeparator: "{{count}} mensagem não lida",
         unreadSeparator_plural: "{{count}} mensagens não lidas",
         deleted: "apagada",

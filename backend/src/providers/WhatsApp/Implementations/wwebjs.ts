@@ -5,18 +5,21 @@ import {
   MessageMedia,
   Message as WbotMessage,
   Contact as WbotContact,
+  GroupChat,
   MessageSendOptions
 } from "whatsapp-web.js";
 import { getIO } from "../../../libs/socket";
 import Whatsapp from "../../../models/Whatsapp";
 import AppError from "../../../errors/AppError";
 import { logger } from "../../../utils/logger";
+import GetSavedContactNames from "../../../helpers/GetSavedContactNames";
 import { WhatsappProvider } from "../whatsappProvider";
 import {
   ProviderMessage,
   ProviderMediaInput,
   SendMessageOptions,
   SendMediaOptions,
+  GroupParticipant,
   MessageType,
   MessageAck,
   ProviderContact
@@ -134,6 +137,26 @@ const prepareLocation = (msg: WbotMessage): WbotMessage => {
   return msg;
 };
 
+// WhatsApp writes mentions as "@<number>"; show the person's name
+const resolveMentions = async (msg: WbotMessage): Promise<string> => {
+  if (msg.type !== "chat" || !msg.mentionedIds?.length) return msg.body;
+
+  try {
+    const mentioned = await msg.getMentions();
+    const names = await GetSavedContactNames(
+      mentioned.map(contact => contact.id.user)
+    );
+
+    return mentioned.reduce((result, contact) => {
+      const { user } = contact.id;
+      const name = names.get(user) || contact.name || contact.pushname;
+      return name ? result.split(`@${user}`).join(`@${name}`) : result;
+    }, msg.body);
+  } catch {
+    return msg.body;
+  }
+};
+
 const convertToMessagePayload = async (
   msg: WbotMessage
 ): Promise<MessagePayload> => {
@@ -146,7 +169,7 @@ const convertToMessagePayload = async (
 
   return {
     id: processedMsg.id.id,
-    body: processedMsg.body,
+    body: await resolveMentions(processedMsg),
     fromMe: processedMsg.fromMe,
     hasMedia: processedMsg.hasMedia,
     type: mapMessageType(processedMsg.type),
@@ -163,14 +186,36 @@ const convertToMediaPayload = async (
 ): Promise<MediaPayload | undefined> => {
   if (!msg.hasMedia) return undefined;
 
-  const media = await msg.downloadMedia();
-  if (!media) return undefined;
+  // downloadMedia often fails (or returns nothing) right after receipt
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const media = await msg.downloadMedia();
+      if (media) {
+        return {
+          filename: media.filename || "",
+          mimetype: media.mimetype,
+          data: media.data
+        };
+      }
+    } catch (err) {
+      logger.warn({
+        info: "Error downloading media",
+        attempt,
+        err,
+        messageId: msg.id?._serialized
+      });
+    }
+    if (attempt < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+    }
+  }
 
-  return {
-    filename: media.filename || "",
-    mimetype: media.mimetype,
-    data: media.data
-  };
+  logger.error({
+    info: "Could not download media, saving message without it",
+    messageId: msg.id?._serialized
+  });
+  return undefined;
 };
 
 const shouldHandleMessage = (msg: WbotMessage): boolean => {
@@ -345,7 +390,8 @@ const sendMessage = async (
 
   const sentMessage = await wbot.sendMessage(to, body, {
     quotedMessageId: quotedMsgSerializedId,
-    linkPreview: options?.linkPreview
+    linkPreview: options?.linkPreview,
+    mentions: options?.mentions
   });
 
   return convertToProviderMessage(sentMessage);
@@ -433,6 +479,40 @@ const getContacts = async (sessionId: number): Promise<ProviderContact[]> => {
     profilePicUrl: undefined,
     isGroup: contact.isGroup
   }));
+};
+
+const getGroupParticipants = async (
+  sessionId: number,
+  groupId: string
+): Promise<GroupParticipant[]> => {
+  const wbot = getWbot(sessionId);
+  const chat = (await wbot.getChatById(groupId)) as GroupChat;
+  const ownUser = wbot.info?.wid?.user;
+
+  const participants = (chat.participants || []).filter(
+    participant => participant.id.user !== ownUser
+  );
+  const savedNames = await GetSavedContactNames(
+    participants.map(participant => participant.id.user)
+  );
+
+  return Promise.all(
+    participants.map(async participant => {
+      const { user, _serialized: id } = participant.id;
+      let name = savedNames.get(user);
+
+      if (!name) {
+        try {
+          const contact = await wbot.getContactById(id);
+          name = contact.name || contact.pushname || contact.shortName;
+        } catch {
+          /* falls back to the number */
+        }
+      }
+
+      return { id, number: user, name: name || user };
+    })
+  );
 };
 
 const logout = async (sessionId: number): Promise<void> => {
@@ -660,5 +740,6 @@ export const WhatsappWebJsProvider: WhatsappProvider = {
   getProfilePicUrl,
   getContacts,
   sendSeen,
-  fetchChatMessages
+  fetchChatMessages,
+  getGroupParticipants
 };

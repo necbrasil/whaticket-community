@@ -41,6 +41,7 @@ import Contact from "../../../models/Contact";
 import Message from "../../../models/Message";
 import { getIO } from "../../../libs/socket";
 import { logger } from "../../../utils/logger";
+import GetSavedContactNames from "../../../helpers/GetSavedContactNames";
 import AppError from "../../../errors/AppError";
 import StoreWppSessionKeys from "../../../services/WppKeyServices/StoreWppSessionKeys";
 import GetWppSessionKeys from "../../../services/WppKeyServices/GetWppSessionKeys";
@@ -50,6 +51,7 @@ import {
   ProviderMessage,
   ProviderMediaInput,
   SendMediaOptions,
+  GroupParticipant,
   ProviderContact,
   MessageType,
   MessageAck
@@ -845,30 +847,37 @@ const convertToMediaPayload = async (
     `.incoming-${msg.key.id}-${Date.now()}`
   );
 
-  try {
-    const stream = (await downloadMediaMessage(
-      msg,
-      "stream",
-      {},
-      {
-        logger: whaileyLogger,
-        reuploadRequest: wbot.updateMediaMessage
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const stream = (await downloadMediaMessage(
+        msg,
+        "stream",
+        {},
+        {
+          logger: whaileyLogger,
+          reuploadRequest: wbot.updateMediaMessage
+        }
+      )) as Transform;
+
+      await pipelineAsync(stream, createWriteStream(tempPath));
+
+      return { ...getMediaInfo(msg), path: tempPath };
+    } catch (err) {
+      unlink(tempPath, () => undefined);
+      logger.error({
+        info: "Error downloading media",
+        attempt,
+        err,
+        messageId: msg.key.id
+      });
+      if (attempt < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
       }
-    )) as Transform;
-
-    await pipelineAsync(stream, createWriteStream(tempPath));
-
-    return { ...getMediaInfo(msg), path: tempPath };
-  } catch (err) {
-    unlink(tempPath, () => undefined);
-    logger.error({
-      info: "Error downloading media",
-      err,
-      messageId: msg.key.id
-    });
-
-    return undefined;
+    }
   }
+
+  return undefined;
 };
 
 const getMentionedJids = (msg: WAMessage): string[] => {
@@ -1623,7 +1632,9 @@ const sendMessage = async (
 
   const sentMsg = await wbot.sendMessage(
     toJid,
-    { text: body },
+    options?.mentions?.length
+      ? { text: body, mentions: options.mentions }
+      : { text: body },
     quoted ? { quoted } : undefined
   );
 
@@ -1656,6 +1667,47 @@ const sendMessage = async (
     to,
     ack: 1
   };
+};
+
+const getGroupParticipants = async (
+  sessionId: number,
+  groupId: string
+): Promise<GroupParticipant[]> => {
+  const wbot = getWbot(sessionId);
+  const meta = await wbot.groupMetadata(normalizeJid(groupId));
+
+  const me = wbot.user as { id?: string; lid?: string };
+  const ownUsers = [me?.id, me?.lid].map(own => own && jidDecode(own)?.user);
+
+  const participants = (meta.participants || []).filter(participant => {
+    const user = jidDecode(participant.id)?.user;
+    return Boolean(user) && !ownUsers.includes(user);
+  });
+
+  const savedNames = await GetSavedContactNames(
+    participants
+      .map(participant => [participant.id, participant.lid])
+      .reduce((all, jids) => all.concat(jids), [] as (string | undefined)[])
+      .map(jid => (jid ? jidDecode(jid)?.user : undefined))
+      .filter((user): user is string => Boolean(user))
+  );
+
+  return participants.map(participant => {
+    const number = jidDecode(participant.id)?.user as string;
+    const lidUser = participant.lid ? jidDecode(participant.lid)?.user : "";
+    const stored = wbot.store?.contacts?.[jidNormalizedUser(participant.id)];
+
+    const name =
+      savedNames.get(number) ||
+      (lidUser && savedNames.get(lidUser)) ||
+      participant.name ||
+      stored?.name ||
+      participant.notify ||
+      stored?.notify ||
+      number;
+
+    return { id: participant.id, number, name };
+  });
 };
 
 const sendMedia = async (
@@ -1934,5 +1986,6 @@ export const WhaileysProvider: WhatsappProvider = {
   getProfilePicUrl,
   getContacts,
   sendSeen,
-  fetchChatMessages
+  fetchChatMessages,
+  getGroupParticipants
 };

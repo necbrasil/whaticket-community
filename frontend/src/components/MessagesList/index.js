@@ -148,7 +148,7 @@ const useStyles = makeStyles((theme) => {
   },
 
   quotedContainerLeft: {
-    margin: "-3px -70px 6px -6px",
+    margin: "-3px -7px 6px -6px",
     overflow: "hidden",
     backgroundColor: dark ? "#1d282f" : "#f5f6f6",
     borderRadius: "7.5px",
@@ -163,6 +163,8 @@ const useStyles = makeStyles((theme) => {
     display: "block",
     whiteSpace: "pre-wrap",
     overflow: "hidden",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   quotedSideColorLeft: {
@@ -200,8 +202,31 @@ const useStyles = makeStyles((theme) => {
     boxShadow: "0 1px 0.5px rgba(11, 20, 26, 0.13)",
   },
 
+  // stickers have no bubble, like in WhatsApp Web
+  stickerBubble: {
+    backgroundColor: "transparent",
+    boxShadow: "none",
+    paddingBottom: 16,
+    "&::before": {
+      display: "none",
+    },
+  },
+
+  sticker: {
+    display: "block",
+    maxWidth: 190,
+    maxHeight: 190,
+    objectFit: "contain",
+  },
+
+  mediaUnavailable: {
+    padding: "6px 7px 2px",
+    fontStyle: "italic",
+    opacity: 0.7,
+  },
+
   quotedContainerRight: {
-    margin: "-3px -70px 6px -6px",
+    margin: "-3px -7px 6px -6px",
     overflowY: "hidden",
     backgroundColor: dark ? "#025144" : "#d1f4cc",
     borderRadius: "7.5px",
@@ -214,6 +239,8 @@ const useStyles = makeStyles((theme) => {
     maxWidth: 300,
     height: "auto",
     whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
 
   quotedSideColorRight: {
@@ -239,12 +266,22 @@ const useStyles = makeStyles((theme) => {
   },
 
   textContentItem: {
-    overflowWrap: "break-word",
-    padding: "3px 70px 6px 6px",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+    padding: "3px 7px 6px 6px",
   },
 
-  textContentItemEdited: {
-    paddingRight: 130,
+  // invisible inline block at the end of the text: only the last line
+  // makes room for the absolutely positioned timestamp (like WhatsApp Web)
+  timestampSpacer: {
+    display: "inline-block",
+    width: 70,
+    height: 1,
+    verticalAlign: "bottom",
+  },
+
+  timestampSpacerWide: {
+    width: 130,
   },
 
   editedLabel: {
@@ -272,8 +309,9 @@ const useStyles = makeStyles((theme) => {
   textContentItemDeleted: {
     fontStyle: "italic",
     color: dark ? "rgba(233, 237, 239, 0.45)" : "rgba(0, 0, 0, 0.36)",
-    overflowWrap: "break-word",
-    padding: "3px 70px 6px 6px",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+    padding: "3px 7px 6px 6px",
   },
 
   messageMedia: {
@@ -694,6 +732,33 @@ const MessagesList = ({
     setAnchorEl(null);
   };
 
+  const isSticker = (message) =>
+    message.mediaType === "sticker" && !!message.mediaUrl;
+
+  const isImageUrl = (url) =>
+    /\.(jpe?g|png|gif|webp|bmp|heic)(\?.*)?$/i.test(url || "");
+
+  const renderMediaUnavailable = (message) => {
+    const key =
+      message.mediaType === "image"
+        ? "photoUnavailable"
+        : message.mediaType === "sticker"
+        ? "stickerUnavailable"
+        : "mediaUnavailable";
+    return (
+      <div className={classes.mediaUnavailable}>
+        {i18n.t(`messagesList.${key}`)}
+      </div>
+    );
+  };
+
+  const isMediaMissing = (message) =>
+    !message.mediaUrl &&
+    !message.isDeleted &&
+    ["image", "sticker", "video", "audio", "document"].includes(
+      message.mediaType
+    );
+
   const checkMessageMedia = (message) => {
     if (message.mediaType === "location" && message.body.split('|').length >= 2) {
       let locationParts = message.body.split('|')
@@ -744,7 +809,18 @@ const MessagesList = ({
         )
       } else return (<></>)
     }*/
-    else if ( /^.*\.(jpe?g|png|gif)?$/i.exec(message.mediaUrl) && message.mediaType === "image") {
+    else if (message.mediaType === "sticker") {
+      return (
+        <img
+          className={classes.sticker}
+          src={message.mediaUrl}
+          alt="sticker"
+        />
+      );
+    } else if (
+      message.mediaType === "image" ||
+      (isImageUrl(message.mediaUrl) && !message.mediaType)
+    ) {
       return <ModalImageCors imageUrl={message.mediaUrl} />;
     } else if (message.mediaType === "audio") {
       return <Audio url={message.mediaUrl} />
@@ -934,6 +1010,7 @@ const MessagesList = ({
                 id={`message-${message.id}`}
                 className={clsx(classes.messageLeft, {
                   [classes.tailLeft]: startsSequence(index),
+                  [classes.stickerBubble]: isSticker(message),
                   [classes.highlighted]: highlightedId === message.id,
                 })}
                 onDoubleClick={() => handleReplyOnDoubleClick(message)}
@@ -956,11 +1033,10 @@ const MessagesList = ({
                 {(message.mediaUrl || message.mediaType === "location" || message.mediaType === "vcard"
                   //|| message.mediaType === "multi_vcard" 
                 ) && checkMessageMedia(message)}
+                {isMediaMissing(message) && renderMediaUnavailable(message)}
                 <div
                   className={clsx(classes.textContentItem, {
                     [classes.textContentItemDeleted]: message.isDeleted,
-                    [classes.textContentItemEdited]:
-                      message.isEdited || message.isDeleted,
                   })}
                 >
                   {message.isDeleted && (
@@ -971,7 +1047,15 @@ const MessagesList = ({
                     />
                   )}
                   {message.quotedMsg && renderQuotedMessage(message)}
-                  <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                  {!isSticker(message) && (
+                    <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                  )}
+                  <span
+                    className={clsx(classes.timestampSpacer, {
+                      [classes.timestampSpacerWide]:
+                        message.isEdited || message.isDeleted,
+                    })}
+                  />
                   <span className={classes.timestamp}>
                     {renderEditedLabel(message)}
                     {format(parseISO(message.createdAt), "HH:mm")}
@@ -990,6 +1074,7 @@ const MessagesList = ({
                 id={`message-${message.id}`}
                 className={clsx(classes.messageRight, {
                   [classes.tailRight]: startsSequence(index),
+                  [classes.stickerBubble]: isSticker(message),
                   [classes.highlighted]: highlightedId === message.id,
                 })}
                 onDoubleClick={() => handleReplyOnDoubleClick(message)}
@@ -1007,11 +1092,10 @@ const MessagesList = ({
                 {(message.mediaUrl || message.mediaType === "location" || message.mediaType === "vcard"
                   //|| message.mediaType === "multi_vcard" 
                 ) && checkMessageMedia(message)}
+                {isMediaMissing(message) && renderMediaUnavailable(message)}
                 <div
                   className={clsx(classes.textContentItem, {
                     [classes.textContentItemDeleted]: message.isDeleted,
-                    [classes.textContentItemEdited]:
-                      message.isEdited || message.isDeleted,
                   })}
                 >
                   {message.isDeleted && (
@@ -1022,7 +1106,15 @@ const MessagesList = ({
                     />
                   )}
                   {message.quotedMsg && renderQuotedMessage(message)}
-                  <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                  {!isSticker(message) && (
+                    <MarkdownWrapper>{message.body}</MarkdownWrapper>
+                  )}
+                  <span
+                    className={clsx(classes.timestampSpacer, {
+                      [classes.timestampSpacerWide]:
+                        message.isEdited || message.isDeleted,
+                    })}
+                  />
                   <span className={classes.timestamp}>
                     {renderEditedLabel(message)}
                     {format(parseISO(message.createdAt), "HH:mm")}

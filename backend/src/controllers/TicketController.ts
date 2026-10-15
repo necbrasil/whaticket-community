@@ -9,6 +9,8 @@ import UpdateTicketService from "../services/TicketServices/UpdateTicketService"
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import formatBody from "../helpers/Mustache";
+import GetContactChatId from "../helpers/GetContactChatId";
+import { whatsappProvider } from "../providers/WhatsApp";
 
 type IndexQuery = {
   searchParam: string;
@@ -80,6 +82,26 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
   const contact = await ShowTicketService(ticketId);
 
   return res.status(200).json(contact);
+};
+
+export const participants = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+
+  const ticket = await ShowTicketService(ticketId);
+
+  if (!ticket.isGroup || !ticket.whatsappId) {
+    return res.status(200).json([]);
+  }
+
+  const groupParticipants = await whatsappProvider.getGroupParticipants(
+    ticket.whatsappId,
+    GetContactChatId(ticket.contact, true)
+  );
+
+  return res.status(200).json(groupParticipants);
 };
 
 export const update = async (

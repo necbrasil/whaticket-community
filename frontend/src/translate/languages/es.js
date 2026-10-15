@@ -409,6 +409,9 @@ const messages = {
         },
       },
       messagesList: {
+        photoUnavailable: "Foto no disponible",
+        stickerUnavailable: "Sticker no disponible",
+        mediaUnavailable: "Medio no disponible",
         unreadSeparator: "{{count}} mensaje no leído",
         unreadSeparator_plural: "{{count}} mensajes no leídos",
         deleted: "eliminado",

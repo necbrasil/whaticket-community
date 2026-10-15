@@ -265,6 +265,7 @@ const Conversation = ({ contactId }) => {
             ticketStatus="open"
             getTicketId={getTicketId}
             resetKey={contactId}
+            isGroup={contact.isGroup}
             droppedFiles={droppedFiles}
           />
         </ReplyMessageProvider>
