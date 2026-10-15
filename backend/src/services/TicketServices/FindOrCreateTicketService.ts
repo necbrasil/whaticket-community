@@ -1,5 +1,6 @@
 import { subHours } from "date-fns";
 import { Op } from "sequelize";
+import IsGroupNumber from "../../helpers/IsGroupNumber";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import ShowTicketService from "./ShowTicketService";
@@ -10,6 +11,14 @@ const FindOrCreateTicketService = async (
   unreadMessages: number,
   groupContact?: Contact
 ): Promise<Ticket> => {
+  const ticketContact = groupContact || contact;
+  // messages sent from the phone to a group have no groupContact: the group
+  // itself is the contact
+  const isGroup =
+    !!groupContact ||
+    ticketContact.isGroup ||
+    IsGroupNumber(ticketContact.number);
+
   let ticket = await Ticket.findOne({
     where: {
       status: {
@@ -63,11 +72,15 @@ const FindOrCreateTicketService = async (
     }
   }
 
+  if (ticket && isGroup && !ticket.isGroup) {
+    await ticket.update({ isGroup: true });
+  }
+
   if (!ticket) {
     ticket = await Ticket.create({
       contactId: groupContact ? groupContact.id : contact.id,
       status: "pending",
-      isGroup: !!groupContact,
+      isGroup,
       unreadMessages,
       whatsappId
     });

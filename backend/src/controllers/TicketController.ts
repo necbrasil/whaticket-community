@@ -10,6 +10,7 @@ import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import formatBody from "../helpers/Mustache";
 import GetContactChatId from "../helpers/GetContactChatId";
+import IsGroupNumber from "../helpers/IsGroupNumber";
 import { whatsappProvider } from "../providers/WhatsApp";
 
 type IndexQuery = {
@@ -92,7 +93,10 @@ export const participants = async (
 
   const ticket = await ShowTicketService(ticketId);
 
-  if (!ticket.isGroup || !ticket.whatsappId) {
+  if (
+    !(ticket.isGroup || IsGroupNumber(ticket.contact.number)) ||
+    !ticket.whatsappId
+  ) {
     return res.status(200).json([]);
   }
 

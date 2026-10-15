@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import AppError from "../../errors/AppError";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
+import IsGroupNumber from "../../helpers/IsGroupNumber";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 
@@ -24,14 +25,19 @@ const GetConversationTicketService = async (
     },
     order: [["updatedAt", "DESC"]]
   });
-  if (current) return current;
+  const isGroup = contact.isGroup || IsGroupNumber(contact.number);
+
+  if (current) {
+    if (isGroup && !current.isGroup) await current.update({ isGroup: true });
+    return current;
+  }
 
   const whatsapp = await GetDefaultWhatsApp(userId);
 
   return Ticket.create({
     contactId: contact.id,
     status: "open",
-    isGroup: contact.isGroup,
+    isGroup,
     unreadMessages: 0,
     whatsappId: whatsapp.id
   });

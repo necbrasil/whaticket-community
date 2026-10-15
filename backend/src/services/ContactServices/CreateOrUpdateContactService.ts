@@ -1,4 +1,5 @@
 import { getIO } from "../../libs/socket";
+import IsGroupNumber from "../../helpers/IsGroupNumber";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import { logger } from "../../utils/logger";
@@ -29,10 +30,11 @@ const CreateOrUpdateContactService = async ({
   number: rawNumber,
   lid: rawLid,
   profilePicUrl,
-  isGroup,
+  isGroup: rawIsGroup,
   email = "",
   extraInfo = []
 }: Request): Promise<Contact> => {
+  const isGroup = rawIsGroup || IsGroupNumber(rawNumber);
   const number = isGroup ? rawNumber : rawNumber.replace(/[^0-9]/g, "");
   // the same LID may come with a device suffix ("123:45@lid"); store it without
   const lid = rawLid?.replace(/:\d+@/, "@");
