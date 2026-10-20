@@ -1,8 +1,7 @@
 import { getIO } from "../../libs/socket";
 import IsGroupNumber from "../../helpers/IsGroupNumber";
 import Contact from "../../models/Contact";
-import Ticket from "../../models/Ticket";
-import { logger } from "../../utils/logger";
+import MergeContactsService from "./MergeContactsService";
 
 interface ExtraInfo {
   name: string;
@@ -25,6 +24,15 @@ const emitContact = (action: "update" | "create", contact: Contact) => {
   io.emit("contact", { action, contact });
 };
 
+const isDigitsOnly = (value: string): boolean => /^[+\d\s()-]*$/.test(value);
+
+// a contact whose name is just digits (its number or LID) has no real name yet
+const hasPlaceholderName = (contact: Contact): boolean =>
+  isDigitsOnly((contact.name || "").trim());
+
+const isRealName = (name?: string): name is string =>
+  !!name && !isDigitsOnly(name.trim());
+
 const CreateOrUpdateContactService = async ({
   name,
   number: rawNumber,
@@ -40,31 +48,31 @@ const CreateOrUpdateContactService = async ({
   const lid = rawLid?.replace(/:\d+@/, "@");
   if (!number && !lid) throw new Error("Either number or lid must be provided");
 
+  // phone unknown: the LID digits stand in for the number (see GetContactChatId)
+  const numberIsLid = !isGroup && !!lid && number === lid.split("@")[0];
+
   const [contactByNumber, contactByLid] = await Promise.all([
-    number ? Contact.findOne({ where: { number } }) : null,
+    number && !numberIsLid ? Contact.findOne({ where: { number } }) : null,
     lid ? Contact.findOne({ where: { lid } }) : null
   ]);
+
+  // only what is known is applied, so an update never blanks stored data
+  const buildChanges = (contact: Contact): Partial<Contact> => {
+    const changes: Partial<Contact> = {};
+
+    if (profilePicUrl) changes.profilePicUrl = profilePicUrl;
+    if (isRealName(name) && hasPlaceholderName(contact)) changes.name = name;
+
+    return changes;
+  };
 
   const shouldMerge =
     contactByNumber && contactByLid && contactByNumber.id !== contactByLid.id;
 
   if (shouldMerge) {
-    await Ticket.update(
-      { contactId: contactByNumber.id },
-      { where: { contactId: contactByLid.id } }
-    );
-
-    await contactByLid.destroy();
-
-    await contactByNumber.update({
-      lid: contactByLid.lid,
-      profilePicUrl
-    });
-
-    logger.info({
-      info: "Merged contacts by number and lid",
-      primaryContactId: contactByNumber.id,
-      mergedContactId: contactByLid.id
+    await MergeContactsService(contactByNumber, contactByLid, {
+      ...buildChanges(contactByNumber),
+      lid: contactByLid.lid
     });
 
     emitContact("update", contactByNumber);
@@ -74,9 +82,9 @@ const CreateOrUpdateContactService = async ({
 
   if (contactByNumber) {
     await contactByNumber.update({
+      ...buildChanges(contactByNumber),
       lid: lid || contactByNumber.lid,
-      isGroup: isGroup || contactByNumber.isGroup,
-      profilePicUrl
+      isGroup: isGroup || contactByNumber.isGroup
     });
 
     emitContact("update", contactByNumber);
@@ -85,9 +93,10 @@ const CreateOrUpdateContactService = async ({
   }
 
   if (contactByLid) {
+    // a LID-only message must not replace the phone we already know
     await contactByLid.update({
-      number: number || contactByLid.number,
-      profilePicUrl
+      ...buildChanges(contactByLid),
+      ...(number && !numberIsLid ? { number } : {})
     });
 
     emitContact("update", contactByLid);

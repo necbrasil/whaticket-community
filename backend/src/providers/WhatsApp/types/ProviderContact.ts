@@ -3,6 +3,7 @@ export interface ProviderContact {
   name?: string;
   pushname?: string;
   number: string;
+  lid?: string;
   profilePicUrl?: string;
   isGroup: boolean;
 }

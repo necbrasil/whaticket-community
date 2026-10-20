@@ -16,6 +16,7 @@ import makeWASocket, {
   isJidBroadcast,
   makeCacheableSignalKeyStore,
   BufferJSON,
+  Contact as WAContact,
   WAMessage,
   WAMessageKey,
   downloadMediaMessage,
@@ -43,6 +44,9 @@ import { getIO } from "../../../libs/socket";
 import { logger } from "../../../utils/logger";
 import GetSavedContactNames from "../../../helpers/GetSavedContactNames";
 import AppError from "../../../errors/AppError";
+import LinkContactLidService, {
+  LinkContactLidsService
+} from "../../../services/ContactServices/LinkContactLidService";
 import StoreWppSessionKeys from "../../../services/WppKeyServices/StoreWppSessionKeys";
 import GetWppSessionKeys from "../../../services/WppKeyServices/GetWppSessionKeys";
 import { getRedisClient } from "../../../libs/redisStore";
@@ -522,20 +526,31 @@ const getMessageEdit = (
   return { messageId: protocolMessage.key.id, body };
 };
 
+const handledMessageTypes = [
+  "conversation",
+  "extendedTextMessage",
+  "imageMessage",
+  "videoMessage",
+  "audioMessage",
+  "documentMessage",
+  "stickerMessage",
+  "locationMessage",
+  "contactMessage",
+  "contactsArrayMessage"
+];
+
+// content that is expected to be dropped, not worth a warning
+const ignoredMessageTypes = [
+  "protocolMessage",
+  "reactionMessage",
+  "editedMessage",
+  "senderKeyDistributionMessage",
+  "messageContextInfo"
+];
+
 const shouldHandleMessage = (msg: WAMessage): boolean => {
   const messageType = getContentType(msg.message || undefined);
-  const validTypes = [
-    "conversation",
-    "extendedTextMessage",
-    "imageMessage",
-    "videoMessage",
-    "audioMessage",
-    "documentMessage",
-    "stickerMessage",
-    "locationMessage",
-    "contactMessage",
-    "contactsArrayMessage"
-  ];
+  const validTypes = handledMessageTypes;
 
   if (!validTypes.includes(messageType || "")) return false;
 
@@ -552,6 +567,54 @@ const shouldHandleMessage = (msg: WAMessage): boolean => {
   ];
 
   return hasMedia(msg) || allowedFromMeTypes.includes(messageType || "");
+};
+
+// an incoming message that is dropped is otherwise lost without a trace
+const warnIfDroppedIncoming = (msg: WAMessage): void => {
+  if (msg.key.fromMe) return;
+
+  const info = {
+    remoteJid: msg.key.remoteJid,
+    participant: msg.key.participant,
+    id: msg.key.id
+  };
+
+  if (!msg.message) {
+    // group events and the like are stubs by design; only an undecryptable
+    // message (ciphertext stub) or one with no stub at all is a loss
+    const stubType = msg.messageStubType;
+    if (stubType && stubType !== proto.WebMessageInfo.StubType.CIPHERTEXT) {
+      return;
+    }
+
+    logger.warn({
+      info: "Incoming message dropped: no content (decryption failure?)",
+      ...info,
+      messageStubType: stubType,
+      messageStubParameters: msg.messageStubParameters
+    });
+    return;
+  }
+
+  const messageType = getContentType(msg.message);
+  const isNoise = Object.keys(msg.message).every(key =>
+    ignoredMessageTypes.includes(key)
+  );
+
+  if (
+    isNoise ||
+    (messageType &&
+      (handledMessageTypes.includes(messageType) ||
+        ignoredMessageTypes.includes(messageType)))
+  ) {
+    return;
+  }
+
+  logger.warn({
+    info: "Incoming message dropped: unhandled content type",
+    ...info,
+    messageType: messageType || Object.keys(msg.message)
+  });
 };
 
 const getMessageSecret = (msg: WAMessage): string | undefined => {
@@ -612,6 +675,37 @@ type ExtendedContext = proto.IContextInfo &
     peer_recipient_pn: string;
   }>;
 
+// the LID's phone number, from what the session or the database already know
+const resolvePnFromLid = async (
+  lidJid: string,
+  wbot: Session
+): Promise<string | undefined> => {
+  const lidUser = jidDecode(lidJid)?.user;
+  if (!lidUser) return undefined;
+
+  const stored = Object.values(wbot.store?.contacts || {}).find(
+    c =>
+      c.lid &&
+      jidDecode(c.lid)?.user === lidUser &&
+      /@s\.whatsapp\.net$/i.test(c.id)
+  );
+  if (stored) return jidNormalizedUser(stored.id);
+
+  try {
+    const contact = await Contact.findOne({
+      where: { lid: `${lidUser}@lid` },
+      attributes: ["number"]
+    });
+    if (contact?.number && contact.number !== lidUser) {
+      return `${contact.number}@s.whatsapp.net`;
+    }
+  } catch (err) {
+    logger.debug({ info: "Could not resolve lid from database", lidJid, err });
+  }
+
+  return undefined;
+};
+
 const convertToContactPayload = async (
   jid: string,
   msg: WAMessage,
@@ -663,9 +757,13 @@ const convertToContactPayload = async (
     keyExt.peerRecipientPn || keyExt.peer_recipient_pn
   ];
 
-  const preferPn = pnCandidates.find(
+  let preferPn = pnCandidates.find(
     v => typeof v === "string" && /@s\.whatsapp\.net$/i.test(v)
   );
+
+  if (!preferPn && resolvedJid.endsWith("@lid")) {
+    preferPn = await resolvePnFromLid(resolvedJid, wbot);
+  }
 
   if (resolvedJid.endsWith("@lid") && preferPn) {
     resolvedJid = preferPn;
@@ -763,7 +861,7 @@ const convertToContactPayload = async (
     normalizedJid.split("@")[0];
 
   // drop the device suffix ("123:45@lid"), it varies between messages
-  const lidUser = jidDecode(lid || "")?.user;
+  const lidUser = jidDecode(lid || (isLidUser(jid) ? jid : ""))?.user;
   const lidValue =
     isLidUser(resolvedJid) && decoded?.user
       ? `${decoded.user}@lid`
@@ -1118,6 +1216,7 @@ const removeSession = async (whatsappId: number): Promise<void> => {
     wbot.ev.removeAllListeners("blocklist.update");
     wbot.ev.removeAllListeners("messaging-history.set");
     wbot.ev.removeAllListeners("messages.reaction");
+    wbot.ev.removeAllListeners("contacts.phone-number-share");
 
     try {
       wbot.end(undefined);
@@ -1306,7 +1405,10 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     });
 
     const validMessages = messages.map(unwrapMessage).filter(msg => {
-      if (!msg.message || !shouldHandleMessage(msg)) return false;
+      if (!msg.message || !shouldHandleMessage(msg)) {
+        warnIfDroppedIncoming(msg);
+        return false;
+      }
 
       // "append" also carries messages received while the connection was
       // offline (e.g. during a deploy); dropping them lost those messages
@@ -1339,6 +1441,30 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
       )
     );
   });
+
+  // learns which phone a LID belongs to, so LID-only messages reach the right contact
+  wbot.ev.on("contacts.phone-number-share", ({ lid, jid }) => {
+    if (!lid || !jid) return;
+
+    LinkContactLidService({ number: jid.split("@")[0], lid }).catch(err =>
+      logger.warn({ info: "Error linking shared phone number", err })
+    );
+  });
+
+  const linkContactsLids = (contacts: Partial<WAContact>[]) => {
+    const pairs = contacts
+      .filter(c => c.id && c.lid && isJidUser(c.id))
+      .map(c => ({ number: jidDecode(c.id!)?.user || "", lid: c.lid! }));
+
+    if (pairs.length === 0) return;
+
+    LinkContactLidsService(pairs).catch(err =>
+      logger.warn({ info: "Error linking contacts lids", err })
+    );
+  };
+
+  wbot.ev.on("contacts.upsert", linkContactsLids);
+  wbot.ev.on("contacts.update", linkContactsLids);
 
   wbot.ev.on("connection.update", async update => {
     const { connection, lastDisconnect, qr } = update;
@@ -1922,6 +2048,7 @@ const getContacts = async (sessionId: number): Promise<ProviderContact[]> => {
         contacts.push({
           id: contact.id,
           number: jidNormalizedUser(contact.id).replace("@s.whatsapp.net", ""),
+          lid: contact.lid,
           name: contact.name || contact.notify || "",
           pushname: contact.notify || "",
           isGroup: false
